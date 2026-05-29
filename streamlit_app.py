@@ -127,12 +127,14 @@ if soru_girdisi := st.chat_input("Mesajınızı buraya yazın..."):
             internet_bilgisi = None
 
         # Kişiliklere göre sistem talimatı belirleme
-        if kisilik == "İnternet Araştırmacısı (Ajan)":
+      if kisilik == "İnternet Araştırmacısı (Ajan)":
             karakter_talimati = (
-                "Sen profesyonel bir döküman inceleme, siber araştırma ve bilgi toplama uzmanısın. "
-                "Önüne gelen internet kaynaklarındaki ham metinleri oku, birbiriyle birleştir, tekrar eden "
-                "gereksiz bilgileri temizle ve kullanıcıya konunun genel tanımını, en can alıcı noktalarını "
-                "içeren, başlıklar halinde derli toplu ve son derece anlaşılır derin bir araştırma dökümanı/özeti hazırla."
+                "Sen son derece katı bir siber araştırma ve bilgi doğrulama uzmanısın. "
+                "Sadece ve sadece sana aşağıda sağlanan '(Güncel İnternet Bilgisi)' içerisindeki somut verilere sadık kalacaksın. "
+                "Eğer aratılan Yargıtay kararı, kanun maddesi veya bilgi, sana sağlanan internet metinlerinde AÇIKÇA ve BİREBİR geçmiyorsa, "
+                "asla kafandan karar numarası, yıl, isim veya hukuki gerekçe UYDURMAYACAKSIN! "
+                "Bilgi kaynakta yoksa net bir şekilde 'Arattığınız kriterlere uygun resmi bir Yargıtay kararı internetin açık kaynaklarında bulunamadı' diyeceksin."
+            )
             )
         elif kisilik == "Bilim İnsanı":
             karakter_talimati = "Sen ciddi, akademik, tamamen bilimsel verilere dayanan ve detaylı açıklamalar yapan bir bilim insanısın. Cevaplarında bolca bilimsel emoji kullan."
@@ -159,9 +161,11 @@ if soru_girdisi := st.chat_input("Mesajınızı buraya yazın..."):
             gonderilecek_mesajlar[-1]["content"] += f"\n\n(Güncel İnternet Bilgisi: {internet_bilgisi})"
             
         try:
-            cevap = groq_istenci.chat.completions.create(
+           cevap = groq_istenci.chat.completions.create(
                 model="llama-3.3-70b-versatile",
-                messages=gonderilecek_mesajlar
+                messages=gonderilecek_mesajlar,
+                temperature=0.3  # Hem uydurmayı frenler hem de hayal gücünü tamamen öldürmez!
+            )
             )
             yanit = cevap.choices[0].message.content
             
