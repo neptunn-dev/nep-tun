@@ -120,11 +120,11 @@ if soru_girdisi := st.chat_input("Mesajınızı buraya yazın..."):
             st.write(yanit)
             st.session_state.mesaj_gecmisi.append({"role": "assistant", "content": yanit})
             
-            # Sesli Okuma (Text-to-Speech)
-            with st.spinner("🔊 Ses dosyası hazırlanıyor..."):
-                tts = gTTS(text=yanit[:300], lang='tr')
+            # Yenilenen Sesli Okuma Ayarı (Daha Akıcı Türkçe)
+            with St.spinner("🔊 Ses dosyası hazırlanıyor..."):
+                tts = gTTS(text=yanit[:300], lang='tr', tld='com.tr')
                 tts.save("cevap.mp3")
-                st.audio("cevap.mp3", format="audio/mp3")
+                St.audio("cevap.mp3", format="audio/mp3")
                 
         except Exception as e:
-            st.error(f"Bir hata oluştu: {e}")
+            St.error(f"Bir hata oluştu: {e}")
