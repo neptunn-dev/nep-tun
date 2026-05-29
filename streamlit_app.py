@@ -1,6 +1,8 @@
 import streamlit as st
 from groq import Groq
 from tavily import TavilyClient
+from gtts import gTTS
+import os
 
 # API Anahtarlarını Streamlit Secrets üzerinden alıyoruz
 GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
@@ -9,13 +11,45 @@ TAVILY_API_KEY = st.secrets["TAVILY_API_KEY"]
 groq_istenci = Groq(api_key=GROQ_API_KEY)
 tavily_istenci = TavilyClient(api_key=TAVILY_API_KEY)
 
-st.set_page_config(page_title="Yapay Zeka Asistanı", page_icon="🤖")
-st.title("🤖 Gelişmiş Yapay Zeka Asistanı")
-st.write("Benimle hem sohbet edebilirsin hem de benden bir şeyleri araştırmamı veya açıklamamı isteyebilirsin!")
+st.set_page_config(page_title="Mega Yapay Zeka İstasyonu", page_icon="🚀", layout="wide")
 
 # Hafıza Kurulumu
 if "mesaj_gecmisi" not in st.session_state:
     st.session_state.mesaj_gecmisi = []
+
+# --- SOL MENÜ (SIDEBAR) AYARLARI ---
+with st.sidebar:
+    st.header("⚙️ Kontrol Paneli")
+    
+    # 1. Özellik: Sohbeti Temizle Butonu
+    if st.button("🗑️ Sohbeti Temizle", use_container_width=True):
+        st.session_state.mesaj_gecmisi = []
+        st.rerun()
+        
+    st.write("---")
+    
+    # 3. Özellik: Kişilik Seçme Menüsü
+    kisilik = st.selectbox(
+        "🤖 Asistan Kişiliği Seçin:",
+        ["Standart Asistan", "Bilim İnsanı", "Mahalle Arkadaşı (Kanka)", "Yazılımcı Mentoru"]
+    )
+    
+    st.write("---")
+    
+    # 2. Özellik: PDF / Dosya Yükleme Alanı
+    st.subheader("📁 Döküman Analizi")
+    yuklenen_dosya = st.file_uploader("Bir metin veya PDF dosyası yükleyin:", type=["txt"])
+    dosya_icerigi = ""
+    if yuklenen_dosya is not None:
+        try:
+            dosya_icerigi = yuklenen_dosya.read().decode("utf-8")
+            st.success("Dosya başarıyla okundu!")
+        except Exception:
+            st.error("Dosya okunurken bir hata oluştu (Şimdilik sadece .txt destekleniyor).")
+
+# Ana Sayfa Başlıkları
+st.title("🚀 Mega Yapay Zeka İstasyonu")
+st.write(f"Şu anki mod: **{kisilik}** | Geçmişi hatırlar, internette arar, dosya okur ve sesli konuşur!")
 
 # Eski mesajları ekranda göster
 for mesaj in st.session_state.mesaj_gecmisi:
@@ -32,7 +66,7 @@ def internette_ara(soru):
         return None
 
 # Kullanıcıdan girdi alma
-if soru_girdisi := st.chat_input("Mesajınızı yazın..."):
+if soru_girdisi := st.chat_input("Mesajınızı buraya yazın..."):
     
     # Kullanıcı mesajını ekrana bas ve hafızaya kaydet
     with st.chat_message("user"):
@@ -40,34 +74,38 @@ if soru_girdisi := st.chat_input("Mesajınızı yazın..."):
     st.session_state.mesaj_gecmisi.append({"role": "user", "content": soru_girdisi})
 
     with st.chat_message("assistant"):
-        # Gelişmiş Arama ve Açıklama Kelimeleri Listesi
-        arama_kelimeleri = [
-            "nedir", "kimdir", "araştır", "fiyatı", "haber", "hava durumu", 
-            "ne zaman", "son dakika", "açıkla", "anlat", "bilgi ver", "nasıldır"
-        ]
-        
-        # Kullanıcının yazdığı cümlede bu kelimelerden biri geçiyor mu kontrol et
+        # Akıllı internet arama tespiti
+        arama_kelimeleri = ["nedir", "kimdir", "araştır", "fiyatı", "haber", "hava durumu", "ne zaman", "son dakika", "açıkla", "anlat", "bilgi ver"]
         internet_gerekli = any(kelime in soru_girdisi.lower() for kelime in arama_kelimeleri)
         
         if internet_gerekli:
-            with st.spinner("İnternette güncel kaynaklar araştırılıyor ve hazırlanıyor..."):
+            with st.spinner("🌐 İnternet taranıyor..."):
                 internet_bilgisi = internette_ara(soru_girdisi)
         else:
             internet_bilgisi = None
 
-        # Sistem Talimatı
+        # Kişiliklere göre sistem talimatı belirleme
+        if kisilik == "Bilim İnsanı":
+            karakter_talimati = "Sen ciddi, akademik, tamamen bilimsel verilere dayanan ve detaylı açıklamalar yapan bir bilim insanısın."
+        elif kisilik == "Mahalle Arkadaşı (Kanka)":
+            karakter_talimati = "Sen kullanıcının çok yakın bir mahalle arkadaşısın. Samimi, esprili konuş, 'kanka', 'reis', 'brom' gibi kelimeler kullan, asla resmi olma."
+        elif kisilik == "Yazılımcı Mentoru":
+            karakter_talimati = "Sen tecrübeli bir yazılım liderisin. Kullanıcıya kodlama konusunda rehberlik et, motive et ve teknik ama anlaşılır konuş."
+        else:
+            karakter_talimati = "Sen kibar, zeki ve yardımcı bir yapay zeka asistanısın."
+
         sistem_talimati = (
-            "Sen arkadaş canlısı, zeki, esnek ve yardımcı bir yapay zeka asistanısın. "
-            "Eğer kullanıcı sana bir şeyi açıklamanı, anlatmanı veya araştırmanı söylediyse "
-            "ve sana internet bilgisi sağlandıysa, o internet bilgilerini kullanarak detaylı, "
-            "anlaşılır ve açıklayıcı bir cevap ver. "
-            "Eğer internet bilgisi yoksa ve kullanıcı sadece muhabbet ediyorsa, samimi bir şekilde sohbeti sürdür."
+            f"{karakter_talimati} Sana sağlanan internet bilgilerini ve konuşma geçmişini dikkate alarak cevap üret."
         )
         
         gonderilecek_mesajlar = [{"role": "system", "content": sistem_talimati}]
+        
+        # Eğer yüklenmiş bir dosya varsa, yapay zekanın görebilmesi için sisteme ekliyoruz
+        if dosya_icerigi:
+            gonderilecek_mesajlar.append({"role": "system", "content": f"Kullanıcının yüklediği dosya içeriği şudur:\n{dosya_icerigi}"})
+            
         gonderilecek_mesajlar.extend(st.session_state.mesaj_gecmisi)
         
-        # Eğer internet araması yapıldıysa, son mesaja ekleyelim
         if internet_bilgisi:
             gonderilecek_mesajlar[-1]["content"] += f"\n\n(Güncel İnternet Bilgisi: {internet_bilgisi})"
             
@@ -78,9 +116,15 @@ if soru_girdisi := st.chat_input("Mesajınızı yazın..."):
             )
             yanit = cevap.choices[0].message.content
             
+            # Cevabı ekrana yazdır
             st.write(yanit)
             st.session_state.mesaj_gecmisi.append({"role": "assistant", "content": yanit})
             
+            # 4. Özellik: Sesli Okuma (Text-to-Speech)
+            with st.spinner("🔊 Ses dosyası hazırlanıyor..."):
+                tts = gTTS(text=yanit[:300], lang='tr') # Uzun cevaplarda hata vermemesi için ilk 300 harfi okutuyoruz
+                tts.save("cevap.mp3")
+                st.audio("cevap.mp3", format="audio/mp3")
+                
         except Exception as e:
             st.error(f"Bir hata oluştu: {e}")
-            
