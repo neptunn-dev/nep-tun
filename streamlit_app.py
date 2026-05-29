@@ -21,14 +21,14 @@ if "mesaj_gecmisi" not in st.session_state:
 with st.sidebar:
     st.header("⚙️ Kontrol Paneli")
     
-    # 1. Özellik: Sohbeti Temizle Butonu
+    # Sohbeti Temizle Butonu
     if st.button("🗑️ Sohbeti Temizle", use_container_width=True):
         st.session_state.mesaj_gecmisi = []
         st.rerun()
         
     st.write("---")
     
-    # 3. Özellik: Kişilik Seçme Menüsü
+    # Kişilik Seçme Menüsü
     kisilik = st.selectbox(
         "🤖 Asistan Kişiliği Seçin:",
         ["Standart Asistan", "Bilim İnsanı", "Mahalle Arkadaşı (Kanka)", "Yazılımcı Mentoru"]
@@ -36,9 +36,9 @@ with st.sidebar:
     
     st.write("---")
     
-    # 2. Özellik: PDF / Dosya Yükleme Alanı
+    # PDF / Dosya Yükleme Alanı
     st.subheader("📁 Döküman Analizi")
-    yuklenen_dosya = st.file_uploader("Bir metin veya PDF dosyası yükleyin:", type=["txt"])
+    yuklenen_dosya = st.file_uploader("Bir metin dosyası yükleyin:", type=["txt"])
     dosya_icerigi = ""
     if yuklenen_dosya is not None:
         try:
@@ -86,13 +86,13 @@ if soru_girdisi := st.chat_input("Mesajınızı buraya yazın..."):
 
         # Kişiliklere göre sistem talimatı belirleme
         if kisilik == "Bilim İnsanı":
-            karakter_talimati = "Sen ciddi, akademik, tamamen bilimsel verilere dayanan ve detaylı açıklamalar yapan bir bilim insanısın."
+            karakter_talimati = "Sen ciddi, akademik, tamamen bilimsel verilere dayanan ve detaylı açıklamalar yapan bir bilim insanısın. Cevaplarında bolca bilimsel emoji kullan."
         elif kisilik == "Mahalle Arkadaşı (Kanka)":
-            karakter_talimati = "Sen kullanıcının çok yakın bir mahalle arkadaşısın. Samimi, esprili konuş, 'kanka', 'reis', 'brom' gibi kelimeler kullan, asla resmi olma."
+            karakter_talimati = "Sen kullanıcının çok yakın bir mahalle arkadaşısın. Samimi, esprili konuş, 'kanka', 'reis', 'brom' gibi kelimeler kullan, asla resmi olma. Bol bol gülen ve eğlenceli emojiler koy."
         elif kisilik == "Yazılımcı Mentoru":
-            karakter_talimati = "Sen tecrübeli bir yazılım liderisin. Kullanıcıya kodlama konusunda rehberlik et, motive et ve teknik ama anlaşılır konuş."
+            karakter_talimati = "Sen tecrübeli bir yazılım liderisin. Kullanıcıya kodlama konusunda rehberlik et, motive et ve teknik ama anlaşılır konuş. Kod blokları ve teknoloji emojileri kullan."
         else:
-            karakter_talimati = "Sen kibar, zeki ve yardımcı bir yapay zeka asistanısın."
+            karakter_talimati = "Sen kibar, zeki ve yardımcı bir yapay zeka asistanısın. Cevaplarında uygun emojiler kullanmayı unutma."
 
         sistem_talimati = (
             f"{karakter_talimati} Sana sağlanan internet bilgilerini ve konuşma geçmişini dikkate alarak cevap üret."
@@ -100,7 +100,7 @@ if soru_girdisi := st.chat_input("Mesajınızı buraya yazın..."):
         
         gonderilecek_mesajlar = [{"role": "system", "content": sistem_talimati}]
         
-        # Eğer yüklenmiş bir dosya varsa, yapay zekanın görebilmesi için sisteme ekliyoruz
+        # Eğer yüklenmiş bir dosya varsa ekliyoruz
         if dosya_icerigi:
             gonderilecek_mesajlar.append({"role": "system", "content": f"Kullanıcının yüklediği dosya içeriği şudur:\n{dosya_icerigi}"})
             
@@ -120,9 +120,9 @@ if soru_girdisi := st.chat_input("Mesajınızı buraya yazın..."):
             st.write(yanit)
             st.session_state.mesaj_gecmisi.append({"role": "assistant", "content": yanit})
             
-            # 4. Özellik: Sesli Okuma (Text-to-Speech)
+            # Sesli Okuma (Text-to-Speech)
             with st.spinner("🔊 Ses dosyası hazırlanıyor..."):
-                tts = gTTS(text=yanit[:300], lang='tr') # Uzun cevaplarda hata vermemesi için ilk 300 harfi okutuyoruz
+                tts = gTTS(text=yanit[:300], lang='tr')
                 tts.save("cevap.mp3")
                 st.audio("cevap.mp3", format="audio/mp3")
                 
