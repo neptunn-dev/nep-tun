@@ -29,18 +29,17 @@ with st.sidebar:
         
     st.write("---")
     
-    # Kişilik Seçme Menüsü
+    # Kişilik Seçme Menüsü (YENİ AJAN MODU EKLENDİ)
     kisilik = st.selectbox(
         "🤖 Asistan Kişiliği Seçin:",
-        ["Standart Asistan", "Bilim İnsanı", "Mahalle Arkadaşı (Kanka)", "Yazılımcı Mentoru"]
+        ["Standart Asistan", "İnternet Araştırmacısı (Ajan)", "Bilim İnsanı", "Mahalle Arkadaşı (Kanka)", "Yazılımcı Mentoru"]
     )
     
     st.write("---")
     
-    # YENİ ÖZELLİK: Sohbet Geçmişini İndirme (Export)
+    # Sohbet Geçmişini İndirme (Export)
     st.subheader("💾 Raporu İndir")
     if st.session_state.mesaj_gecmisi:
-        # Sohbet geçmişini düz metne çeviriyoruz
         sohbet_metni = ""
         for mesaj in st.session_state.mesaj_gecmisi:
             rol = "Kullanıcı" if mesaj["role"] == "user" else "Yapay Zeka"
@@ -78,12 +77,27 @@ for mesaj in st.session_state.mesaj_gecmisi:
     with st.chat_message(mesaj["role"]):
         st.write(mesaj["content"])
 
-# İnternet arama fonksiyonu
-def internette_ara(soru):
+# Geliştirilmiş İnternet arama fonksiyonu
+def internette_ara(soru, gelismis_mod=False):
     try:
-        arama_sonucu = tavily_istenci.search(query=soru, max_results=3)
-        metinler = [sonuc["content"] for sonuc in arama_sonucu["results"]]
-        return "\n".join(metinler)
+        if gelismis_mod:
+            # Bot korumalı siteler için advanced proxy altyapısını açıyoruz ve 10 kaynak tarıyoruz
+            arama_sonucu = tavily_istenci.search(
+                query=soru, 
+                search_depth="advanced", 
+                max_results=10, 
+                include_raw_content=True
+            )
+            metinler = []
+            for sonuc in arama_sonucu["results"]:
+                icerik = sonuc.get('raw_content') or sonuc.get('content') or "İçerik çekilemedi"
+                metinler.append(f"- {sonuc['title']}: {icerik[:2000]}")
+            return "\n".join(metinler)
+        else:
+            # Diğer kişilikler için eski hızlı ve hafif arama düzeni
+            arama_sonucu = tavily_istenci.search(query=soru, max_results=3)
+            metinler = [sonuc["content"] for sonuc in arama_sonucu["results"]]
+            return "\n".join(metinler)
     except Exception:
         return None
 
@@ -96,18 +110,29 @@ if soru_girdisi := st.chat_input("Mesajınızı buraya yazın..."):
     st.session_state.mesaj_gecmisi.append({"role": "user", "content": soru_girdisi})
 
     with st.chat_message("assistant"):
-        # Akıllı internet arama tespiti
-        arama_kelimeleri = ["nedir", "kimdir", "araştır", "fiyatı", "haber", "hava durumu", "ne zaman", "son dakika", "açıkla", "anlat", "bilgi ver"]
-        internet_gerekli = any(kelime in soru_girdisi.lower() for kelime in arama_kelimeleri)
+        # Eğer mod "İnternet Araştırmacısı (Ajan)" ise her türlü arama yapacak, yoksa eski kelime kontrolü devrede
+        if kisilik == "İnternet Araştırmacısı (Ajan)":
+            internet_gerekli = True
+        else:
+            arama_kelimeleri = ["nedir", "kimdir", "araştır", "fiyatı", "haber", "hava durumu", "ne zaman", "son dakika", "açıkla", "anlat", "bilgi ver"]
+            internet_gerekli = any(kelime in soru_girdisi.lower() for kelime in arama_kelimeleri)
         
         if internet_gerekli:
-            with st.spinner("🌐 İnternet taranıyor..."):
-                internet_bilgisi = internette_ara(soru_girdisi)
+            with St.spinner("🌐 İnternet kaynakları derinlemesine taranıyor..."):
+                is_advanced = (kisilik == "İnternet Araştırmacısı (Ajan)")
+                internet_bilgisi = internette_ara(soru_girdisi, gelismis_mod=is_advanced)
         else:
             internet_bilgisi = None
 
         # Kişiliklere göre sistem talimatı belirleme
-        if kisilik == "Bilim İnsanı":
+        if kisilik == "İnternet Araştırmacısı (Ajan)":
+            karakter_talimati = (
+                "Sen profesyonel bir döküman inceleme, siber araştırma ve bilgi toplama uzmanısın. "
+                "Önüne gelen internet kaynaklarındaki ham metinleri oku, birbiriyle birleştir, tekrar eden "
+                "gereksiz bilgileri temizle ve kullanıcıya konunun genel tanımını, en can alıcı noktalarını "
+                "içeren, başlıklar halinde derli toplu ve son derece anlaşılır derin bir araştırma dökümanı/özeti hazırla."
+            )
+        elif kisilik == "Bilim İnsanı":
             karakter_talimati = "Sen ciddi, akademik, tamamen bilimsel verilere dayanan ve detaylı açıklamalar yapan bir bilim insanısın. Cevaplarında bolca bilimsel emoji kullan."
         elif kisilik == "Mahalle Arkadaşı (Kanka)":
             karakter_talimati = "Sen kullanıcının çok yakın bir mahalle arkadaşısın. Samimi, esprili konuş, 'kanka', 'reis', 'brom' gibi kelimeler kullan, asla resmi olma. Bol bol gülen ve eğlenceli emojiler koy."
@@ -138,7 +163,7 @@ if soru_girdisi := st.chat_input("Mesajınızı buraya yazın..."):
             )
             yanit = cevap.choices[0].message.content
             
-            # Cevabı ekrana yazdır (Burada emojiler görünecek)
+            # Cevabı ekrana yazdır
             st.write(yanit)
             st.session_state.mesaj_gecmisi.append({"role": "assistant", "content": yanit})
             
