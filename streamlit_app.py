@@ -37,6 +37,27 @@ with st.sidebar:
     
     st.write("---")
     
+    # YENİ ÖZELLİK: Sohbet Geçmişini İndirme (Export)
+    st.subheader("💾 Raporu İndir")
+    if st.session_state.mesaj_gecmisi:
+        # Sohbet geçmişini düz metne çeviriyoruz
+        sohbet_metni = ""
+        for mesaj in st.session_state.mesaj_gecmisi:
+            rol = "Kullanıcı" if mesaj["role"] == "user" else "Yapay Zeka"
+            sohbet_metni += f"{rol}: {mesaj['content']}\n\n"
+            
+        st.download_button(
+            label="📄 Sohbeti Not Olarak İndir",
+            data=sohbet_metni,
+            file_name="sohbet_ozeti.txt",
+            mime="text/plain",
+            use_container_width=True
+        )
+    else:
+        st.caption("İndirmek için önce bir şeyler yazın.")
+        
+    st.write("---")
+    
     # PDF / Dosya Yükleme Alanı
     st.subheader("📁 Döküman Analizi")
     yuklenen_dosya = st.file_uploader("Bir metin dosyası yükleyin:", type=["txt"])
@@ -124,7 +145,7 @@ if soru_girdisi := st.chat_input("Mesajınızı buraya yazın..."):
             # Sadece ses motoru için metindeki emojileri temizliyoruz
             ses_metni = re.sub(r'[^\w\s,.!?:\(\)\-\"\']', '', yanit)
             
-            # Sesli Okuma Ayarı (Temizlenmiş metin gidiyor)
+            # Sesli Okuma Ayarı
             with st.spinner("🔊 Ses dosyası hazırlanıyor..."):
                 tts = gTTS(text=ses_metni[:300], lang='tr', tld='com.tr')
                 tts.save("cevap.mp3")
