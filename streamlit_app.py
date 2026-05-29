@@ -118,7 +118,7 @@ if soru_girdisi := st.chat_input("Mesajınızı buraya yazın..."):
             internet_gerekli = any(kelime in soru_girdisi.lower() for kelime in arama_kelimeleri)
         
         if internet_gerekli:
-            with St.spinner("🌐 İnternet kaynakları derinlemesine taranıyor..."):
+            with st.spinner("🌐 İnternet kaynakları derinlemesine taranıyor..."):
                 is_advanced = (kisilik == "İnternet Araştırmacısı (Ajan)")
                 internet_bilgisi = internette_ara(soru_girdisi, gelismis_mod=is_advanced)
         else:
