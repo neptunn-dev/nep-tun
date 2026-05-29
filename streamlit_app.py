@@ -89,9 +89,10 @@ def internette_ara(soru, gelismis_mod=False):
                 include_raw_content=True
             )
             metinler = []
-            for sonuc in arama_sonucu["results"]:
+          for sonuc in arama_sonucu["results"]:
                 icerik = sonuc.get('raw_content') or sonuc.get('content') or "İçerik çekilemedi"
-                metinler.append(f"- {sonuc['title']}: {icerik[:2000]}")
+                # Burayı 1000 yaparak veri boyutunu yarıya indirip 413 hatasını kalıcı olarak çözüyoruz:
+                metinler.append(f"- {sonuc['title']}: {icerik[:1000]}")
             return "\n".join(metinler)
         else:
             # Diğer kişilikler için eski hızlı ve hafif arama düzeni
