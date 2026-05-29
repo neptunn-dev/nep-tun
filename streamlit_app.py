@@ -30,8 +30,8 @@ def ajan_ara_ve_cevapla(soru):
     
     # Groq ile cevap üretme
     cevap = groq_istenci.chat.completions.create(
-        model="model="llama-3.3-70b-versatile"", # ya da kullandığın diğer model ismi
-        messages=[
+    model="llama-3.3-70b-versatile",
+    messages=[
             {"role": "system", "content": sistem_talimati},
             {"role": "user", "content": f"Soru: {soru}\n\nİnternet Kaynakları:\n{veri_tabani}"}
         ]
