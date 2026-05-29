@@ -3,6 +3,7 @@ from groq import Groq
 from tavily import TavilyClient
 from gtts import gTTS
 import os
+import re
 
 # API Anahtarlarını Streamlit Secrets üzerinden alıyoruz
 GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
@@ -116,13 +117,16 @@ if soru_girdisi := st.chat_input("Mesajınızı buraya yazın..."):
             )
             yanit = cevap.choices[0].message.content
             
-            # Cevabı ekrana yazdır
+            # Cevabı ekrana yazdır (Burada emojiler görünecek)
             st.write(yanit)
             st.session_state.mesaj_gecmisi.append({"role": "assistant", "content": yanit})
             
-            # Sesli Okuma Ayarı (Küçük harflerle st olarak düzeltildi)
+            # Sadece ses motoru için metindeki emojileri temizliyoruz
+            ses_metni = re.sub(r'[^\w\s,.!?:\(\)\-\"\']', '', yanit)
+            
+            # Sesli Okuma Ayarı (Temizlenmiş metin gidiyor)
             with st.spinner("🔊 Ses dosyası hazırlanıyor..."):
-                tts = gTTS(text=yanit[:300], lang='tr', tld='com.tr')
+                tts = gTTS(text=ses_metni[:300], lang='tr', tld='com.tr')
                 tts.save("cevap.mp3")
                 st.audio("cevap.mp3", format="audio/mp3")
                 
