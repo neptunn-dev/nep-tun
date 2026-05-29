@@ -29,7 +29,7 @@ with st.sidebar:
         
     st.write("---")
     
-    # Kişilik Seçme Menüsü (YENİ AJAN MODU EKLENDİ)
+    # Kişilik Seçme Menüsü
     kisilik = st.selectbox(
         "🤖 Asistan Kişiliği Seçin:",
         ["Standart Asistan", "İnternet Araştırmacısı (Ajan)", "Bilim İnsanı", "Mahalle Arkadaşı (Kanka)", "Yazılımcı Mentoru"]
@@ -78,11 +78,10 @@ for mesaj in st.session_state.mesaj_gecmisi:
         st.write(mesaj["content"])
 
 # Geliştirilmiş İnternet arama fonksiyonu
-# Geliştirilmiş İnternet arama fonksiyonu
 def internette_ara(soru, gelismis_mod=False):
     try:
         if gelismis_mod:
-            # max_results değerini 10 yerine 5 yaparak ve karakteri 600'e düşürerek 413'ü kökten çözüyoruz
+            # Filtrelenmiş ve optimize edilmiş derin arama
             arama_sonucu = tavily_istenci.search(
                 query=soru, 
                 search_depth="advanced", 
@@ -92,11 +91,9 @@ def internette_ara(soru, gelismis_mod=False):
             metinler = []
             for sonuc in arama_sonucu["results"]:
                 icerik = sonuc.get('raw_content') or sonuc.get('content') or "İçerik çekilemedi"
-                # Sadece en can alıcı ilk 600 karakteri alıyoruz
                 metinler.append(f"- {sonuc['title']}: {icerik[:600]}")
             return "\n".join(metinler)
         else:
-            # Diğer kişilikler için eski hızlı ve hafif arama düzeni
             arama_sonucu = tavily_istenci.search(query=soru, max_results=3)
             metinler = [sonuc["content"] for sonuc in arama_sonucu["results"]]
             return "\n".join(metinler)
@@ -112,7 +109,7 @@ if soru_girdisi := st.chat_input("Mesajınızı buraya yazın..."):
     st.session_state.mesaj_gecmisi.append({"role": "user", "content": soru_girdisi})
 
     with st.chat_message("assistant"):
-        # Eğer mod "İnternet Araştırmacısı (Ajan)" ise her türlü arama yapacak, yoksa eski kelime kontrolü devrede
+        # Mod kontrolü ve internet tetikleme mekanizması
         if kisilik == "İnternet Araştırmacısı (Ajan)":
             internet_gerekli = True
         else:
@@ -126,15 +123,14 @@ if soru_girdisi := st.chat_input("Mesajınızı buraya yazın..."):
         else:
             internet_bilgisi = None
 
-        # Kişiliklere göre sistem talimatı belirleme
-      if kisilik == "İnternet Araştırmacısı (Ajan)":
+        # Kişiliklere göre sistem talimatı belirleme (Yalan söylemeyi engelleyen sert kurallar)
+        if kisilik == "İnternet Araştırmacısı (Ajan)":
             karakter_talimati = (
-                "Sen son derece katı bir siber araştırma ve bilgi doğrulama uzmanısın. "
-                "Sadece ve sadece sana aşağıda sağlanan '(Güncel İnternet Bilgisi)' içerisindeki somut verilere sadık kalacaksın. "
-                "Eğer aratılan Yargıtay kararı, kanun maddesi veya bilgi, sana sağlanan internet metinlerinde AÇIKÇA ve BİREBİR geçmiyorsa, "
-                "asla kafandan karar numarası, yıl, isim veya hukuki gerekçe UYDURMAYACAKSIN! "
-                "Bilgi kaynakta yoksa net bir şekilde 'Arattığınız kriterlere uygun resmi bir Yargıtay kararı internetin açık kaynaklarında bulunamadı' diyeceksin."
-            )
+                "Sen son derece güvenilir bir araştırma uzmanısın. İnternet aramalarında bulamadığın, "
+                "kaynaklarda birebir geçmeyen resmi belge, kurum, tarih ve karar numaralarını asla kafandan UYDURMAYACAKSIN. "
+                "Eğer aranan şey internet verilerinde yoksa dürüstçe bulamadığını söyleyeceksiniz. "
+                "Ancak kullanıcı senden bir senaryo üretmeni, hukuki bir konuda yorum yapmanı veya hayal etmeni isterse "
+                "mantıklı ve yaratıcı analizler yapabilirsin."
             )
         elif kisilik == "Bilim İnsanı":
             karakter_talimati = "Sen ciddi, akademik, tamamen bilimsel verilere dayanan ve detaylı açıklamalar yapan bir bilim insanısın. Cevaplarında bolca bilimsel emoji kullan."
@@ -161,11 +157,10 @@ if soru_girdisi := st.chat_input("Mesajınızı buraya yazın..."):
             gonderilecek_mesajlar[-1]["content"] += f"\n\n(Güncel İnternet Bilgisi: {internet_bilgisi})"
             
         try:
-           cevap = groq_istenci.chat.completions.create(
+            cevap = groq_istenci.chat.completions.create(
                 model="llama-3.3-70b-versatile",
                 messages=gonderilecek_mesajlar,
                 temperature=0.3  # Hem uydurmayı frenler hem de hayal gücünü tamamen öldürmez!
-            )
             )
             yanit = cevap.choices[0].message.content
             
