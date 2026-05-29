@@ -78,21 +78,22 @@ for mesaj in st.session_state.mesaj_gecmisi:
         st.write(mesaj["content"])
 
 # Geliştirilmiş İnternet arama fonksiyonu
+# Geliştirilmiş İnternet arama fonksiyonu
 def internette_ara(soru, gelismis_mod=False):
     try:
         if gelismis_mod:
-            # Bot korumalı siteler için advanced proxy altyapısını açıyoruz ve 10 kaynak tarıyoruz
+            # max_results değerini 10 yerine 5 yaparak ve karakteri 600'e düşürerek 413'ü kökten çözüyoruz
             arama_sonucu = tavily_istenci.search(
                 query=soru, 
                 search_depth="advanced", 
-                max_results=10, 
+                max_results=5, 
                 include_raw_content=True
             )
             metinler = []
             for sonuc in arama_sonucu["results"]:
                 icerik = sonuc.get('raw_content') or sonuc.get('content') or "İçerik çekilemedi"
-                # Boyutu 1000 yaparak HTTP 413 hatasını kalıcı olarak çözdük!
-                metinler.append(f"- {sonuc['title']}: {icerik[:1000]}")
+                # Sadece en can alıcı ilk 600 karakteri alıyoruz
+                metinler.append(f"- {sonuc['title']}: {icerik[:600]}")
             return "\n".join(metinler)
         else:
             # Diğer kişilikler için eski hızlı ve hafif arama düzeni
