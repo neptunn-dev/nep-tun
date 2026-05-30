@@ -123,11 +123,12 @@ if soru_girdisi := st.chat_input("Mesajınızı buraya yazın..."):
         else:
             internet_bilgisi = None
 
-      if kisilik == "İnternet Araştırmacısı (Ajan)":
+        # Kişiliklere göre sistem talimatı belirleme (Yalan söylemeyi engelleyen sert kurallar)
+        if kisilik == "İnternet Araştırmacısı (Ajan)":
             karakter_talimati = (
                 "Sen son derece katı bir siber araştırma ve bilgi doğrulama uzmanısın. "
                 "Adım adım düşün: Önce sana sağlanan internet bilgilerini oku ve kullanıcının aradığı spesifik bilgi/karar numarası orada var mı kontrol et. "
-                "Eğer aranan karar numarası, yıl veya hukuki veri kaynaklarda AÇIKÇA geçmiyorsa, 'İnternet verilerinde bu kriterlere ait resmi bir karara ulaşılamadı' diyeceksin ve asla kafandan uydurmayacaksın. "
+                "Eğer aranan karar numarası, yıl veya hukuki veri kaynaklarda AÇIKÇA geçmiyorsa, 'İnternet verilerinde bu kriterlere ait resmi bir karara ulaşılamadı' diyeceksiniz ve asla kafandan uydurmayacaksın. "
                 "Verdiğin her somut bilginin, rakamın veya dökümanın sonuna hangi başlığı/kaynağı kullandığını parantez içinde yazacaksın (Örn: [Kaynak: Yargıtay Bilgi Bankası]). "
                 "Yalnızca kullanıcı senden hayali bir senaryo, hukuki bir yorum veya beyin fırtınası isterse yaratıcı analizler yapabilirsin."
             )
