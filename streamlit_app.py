@@ -1,3 +1,5 @@
+import asyncio
+from playwright.async_api import async_playwright
 import streamlit as st
 from groq import Groq
 from tavily import TavilyClient
@@ -71,9 +73,22 @@ with st.sidebar:
 st.title("🚀 Mega Yapay Zeka İstasyonu")
 st.write(f"Şu anki mod: **{kisilik}** | İnternette arar, yapıştırılan metinleri doğrudan inceler!")
 
-for mesaj in st.session_state.mesaj_gecmisi:
-    with st.chat_message(mesaj["role"]):
-        st.write(mesaj["content"])
+# --- PLAYWRIGHT ASENKRON FONKSİYONU (DOĞRU YERE ALINDI) ---
+async def yargitay_karar_cek(daire_adi, esas_no, karar_no):
+    try:
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(
+                headless=True,
+                args=["--no-sandbox", "--disable-dev-shm-usage"]
+            )
+            page = await browser.new_page()
+            await page.goto("https://karararama.yargitay.gov.tr/", timeout=60000)
+            await page.wait_for_load_state("networkidle")
+            title = await page.title()
+            await browser.close()
+            return f"Yargıtay Canlı Bağlantı Testi Başarılı! Sayfa Başlığı: {title}"
+    except Exception as e:
+        return f"Yargıtay bağlantı hatası oluştu: {str(e)}"
 
 # KOTA DOSTU ARAMA FONKSİYONU
 def internette_ara(soru, gelismis_mod=False):
@@ -103,6 +118,31 @@ def internette_ara(soru, gelismis_mod=False):
     except Exception:
         return None
 
+# --- ÖZEL MOD: İNTERNET ARAŞTIRMACISI İÇİN YARGITAY PANELİ ---
+if kisilik == "İnternet Araştırmacısı (Ajan)":
+    st.info("⚖️ Yargıtay Canlı Karar Sorgulama Paneli Aktif!")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        daire = st.text_input("Daire Adı", value="11. Hukuk Dairesi")
+    with col2:
+        esas = st.text_input("Esas No (Yıl/Sıra)", value="2019/4530")
+    with col3:
+        karar = st.text_input("Karar No (Yıl/Sıra)", value="2021/4133")
+        
+    if st.button("🔍 Playwright ile Yargıtay'ı Canlı Sorgula", type="primary"):
+        with st.spinner("Playwright arka planda Yargıtay sitesine bağlanıyor..."):
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            sorgu_sonucu = loop.run_until_complete(yargitay_karar_cek(daire, esas, karar))
+            st.success(sorgu_sonucu)
+
+st.write("---")
+
+# Eski Mesajları Ekrana Basma
+for mesaj in st.session_state.mesaj_gecmisi:
+    with st.chat_message(mesaj["role"]):
+        st.write(mesaj["content"])
+
 # Kullanıcıdan girdi alma
 if soru_girdisi := st.chat_input("Mesajınızı buraya yazın..."):
     
@@ -111,7 +151,6 @@ if soru_girdisi := st.chat_input("Mesajınızı buraya yazın..."):
     st.session_state.mesaj_gecmisi.append({"role": "user", "content": soru_girdisi})
 
     with st.chat_message("assistant"):
-        # Eğer sol menüde yapıştırılmış bir metin varsa internet aramasına hiç gerek kalmasın
         if yapistirilan_metin:
             internet_bilgisi = None
             st.caption("⚡ Sol menüye yapıştırılan metin inceleniyor...")
@@ -124,46 +163,5 @@ if soru_girdisi := st.chat_input("Mesajınızı buraya yazın..."):
             else:
                 internet_bilgisi = None
 
-        # Karakter Talimatı (Tamamen düz metne odaklandı)
-        if kisilik == "İnternet Araştırmacısı (Ajan)":
-            karakter_talimati = (
-                "Sen son derece katı bir araştırma ve metin analiz uzmanısın. "
-                "Eğer sana bir 'Kullanıcı Metin İçeriği' sağlandıysa, soruları KESİNLİKLE o metne göre cevapla. "
-                "Metinde yazmayan hiçbir şeyi kafandan uydurma. Bilgi yoksa dürüstçe belirt."
-            )
-        else:
-            karakter_talimati = "Sen kibar, zeki ve yardımcı bir yapay zeka asistanısın."
-
-        sistem_talimati = f"{karakter_talimati} Sağlanan güncel dökümanları ve geçmişi dikkate alarak cevap üret."
-        gonderilecek_mesajlar = [{"role": "system", "content": sistem_talimati}]
-        
-        # EĞER YAPIŞTIRILAN METİN VARSA SİSTEME ENJEKTE EDİYORUZ
-        if yapistirilan_metin:
-            gonderilecek_mesajlar.append({"role": "system", "content": f"Kullanıcının Doğrudan Yapıştırdığı Metin İçeriği:\n{yapistirilan_metin}"})
-        elif dosya_icerigi:
-            gonderilecek_mesajlar.append({"role": "system", "content": f"Dosya içeriği:\n{dosya_icerigi}"})
-            
-        gonderilecek_mesajlar.extend(st.session_state.mesaj_gecmisi[-2:])
-        
-        if internet_bilgisi:
-            gonderilecek_mesajlar[-1]["content"] += f"\n\n(İnternet Bilgisi:\n{internet_bilgisi})"
-            
-        try:
-            cevap = groq_istenci.chat.completions.create(
-                model="llama-3.3-70b-versatile",
-                messages=gonderilecek_mesajlar,
-                temperature=0.2
-            )
-            yanit = cevap.choices[0].message.content
-            
-            st.write(yanit)
-            st.session_state.mesaj_gecmisi.append({"role": "assistant", "content": yanit})
-            
-            ses_metni = re.sub(r'[^\w\s,.!?:\(\)\-\"\']', '', yanit)
-            with st.spinner("🔊 Ses dosyası hazırlanıyor..."):
-                tts = gTTS(text=ses_metni[:300], lang='tr', tld='com.tr')
-                tts.save("cevap.mp3")
-                st.audio("cevap.mp3", format="audio/mp3")
-                
-        except Exception as e:
-            st.warning("⚠️ Küçük bir yoğunluk kısıtlaması oldu. Lütfen birkaç saniye sonra tekrar gönderin.")
+        # Karakter Talimatı
+        if kisilik == "
