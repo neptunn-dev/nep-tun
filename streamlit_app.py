@@ -35,6 +35,13 @@ with st.sidebar:
     
     st.write("---")
     
+    # KOPYALA YAPIŞTIR İLE KESİN ÇÖZÜM ALANI
+    st.subheader("⚖️ Karar Metni Yapıştır")
+    st.caption("İnternette bulunamayan uzun karar metinlerini buraya yapıştırıp aşağıdan soru sorabilirsiniz:")
+    yapistirilan_karar = st.text_area("Karar Metni:", height=250, placeholder="Kopyaladığınız uzun hukuki metni buraya yapıştırın...")
+    
+    st.write("---")
+    
     st.subheader("💾 Raporu İndir")
     if st.session_state.mesaj_gecmisi:
         sohbet_metni = ""
@@ -49,75 +56,52 @@ with st.sidebar:
             mime="text/plain",
             use_container_width=True
         )
-    else:
-        st.caption("İndirmek için önce bir şeyler yazın.")
         
-    st.write("---")
-    
-    st.subheader("📁 Döküman Analizi")
-    yuklenen_dosya = st.file_uploader("Bir metin dosyası yükleyin:", type=["txt"])
+    # PDF / Dosya Yükleme Alanı
+    yuklenen_dosya = st.file_uploader("Veya metin dosyası yükleyin:", type=["txt"])
     dosya_icerigi = ""
     if yuklenen_dosya is not None:
         try:
             dosya_icerigi = yuklenen_dosya.read().decode("utf-8")
             st.success("Dosya başarıyla okundu!")
         except Exception:
-            st.error("Dosya okunurken bir hata oluştu (Şimdilik sadece .txt destekleniyor).")
+            st.error("Dosya okunurken bir hata oluştu.")
 
 # Ana Sayfa Başlıkları
 st.title("🚀 Mega Yapay Zeka İstasyonu")
-st.write(f"Şu anki mod: **{kisilik}** | Geçmişi hatırlar, internette arar, dosya okur ve sesli konuşur!")
+st.write(f"Şu anki mod: **{kisilik}** | İnternette arar, yapıştırılan dökümanları doğrudan inceler!")
 
 for mesaj in st.session_state.mesaj_gecmisi:
     with st.chat_message(mesaj["role"]):
         st.write(mesaj["content"])
 
-# ULTRA KOTA KORUMALI İNTERNET ARAMA MOTORU
+# KOTA DOSTU ARAMA FONKSİYONU
 def internette_ara(soru, gelismis_mod=False):
     try:
-        site_bulucu = re.search(r'([a-zA-Z0-9.-]+\.(com|gov|net|org|edu|com\.tr|gov\.tr))', soru.lower())
+        temiz_soru = soru.lower()
+        temiz_soru = re.sub(r'https?://[^\s]+', '', temiz_soru)
+        temiz_soru = temiz_soru.replace("yargitay", "").replace("yargıtay", "").replace("gov.tr", "").strip()
         
-        # Uzun ve karmaşık soruları arama motorunun sapıtmaması için ilk 120 karakterle sınırlıyoruz
-        optimize_soru = soru[:120]
-        
-        arama_parametreleri = {
-            "query": optimize_soru,
-            "max_results": 2, 
-            "search_depth": "advanced",
-            "include_raw_content": True
-        }
-
-        if site_bulucu:
-            hedef_site = site_bulucu.group(1)
-            temiz_soru = re.sub(r'https?://', '', optimize_soru.lower())
-            temiz_soru = temiz_soru.replace(hedef_site, "").replace("www.", "").strip()
-            temiz_soru = temiz_soru.replace("den", "").replace("dan", "").replace("in", "").strip()
+        optimize_soru = temiz_soru[:100].strip()
+        if not optimize_soru:
+            return None
             
-            if not temiz_soru or len(temiz_soru) < 3:
-                arama_parametreleri["query"] = f"site:{hedef_site} karar esas"
-            else:
-                arama_parametreleri["query"] = f"site:{hedef_site} {temiz_soru}"
-                
-            arama_parametreleri["include_domains"] = [hedef_site]
-
+        arama_parametreleri = {
+            "query": f"{optimize_soru} hukuk karar",
+            "max_results": 2, 
+            "search_depth": "advanced"
+        }
         arama_sonucu = tavily_istenci.search(**arama_parametreleri)
-        
-        if not arama_sonucu.get("results") and site_bulucu:
-            arama_parametreleri.pop("include_domains", None)
-            arama_parametreleri["query"] = optimize_soru
-            arama_sonucu = tavily_istenci.search(**arama_parametreleri)
 
         metinler = []
         for sonuc in arama_sonucu["results"]:
-            icerik = sonuc.get('raw_content') or sonuc.get('content') or "İçerik yok"
+            icerik = sonuc.get('content') or "İçerik yok"
             icerik_temiz = re.sub(r'\s+', ' ', icerik).strip()
-            
-            # KOTA SIKIŞTIRMASI: Sayfa başına max 600 karakter göndererek Groq patlamalarını %100 engelliyoruz
             metinler.append(f"- {sonuc['title']} ({sonuc['url']}): {icerik_temiz[:600]}")
                 
         return "\n".join(metinler)
-    except Exception as e:
-        return f"Arama kısıtlaması: {str(e)}"
+    except Exception:
+        return None
 
 # Kullanıcıdan girdi alma
 if soru_girdisi := st.chat_input("Mesajınızı buraya yazın..."):
@@ -127,36 +111,38 @@ if soru_girdisi := st.chat_input("Mesajınızı buraya yazın..."):
     st.session_state.mesaj_gecmisi.append({"role": "user", "content": soru_girdisi})
 
     with st.chat_message("assistant"):
-        if kisilik == "İnternet Araştırmacısı (Ajan)":
-            internet_gerekli = True
-        else:
-            arama_kelimeleri = ["nedir", "kimdir", "araştır", "fiyatı", "haber", "hava durumu", "ne zaman", "son dakika", "açıkla", "anlat", "bilgi ver", ".com", ".gov", ".net"]
-            internet_gerekli = any(kelime in soru_girdisi.lower() for kelime in arama_kelimeleri)
-        
-        if internet_gerekli:
-            with st.spinner("🌐 Hedef kaynaklar taranıyor..."):
-                is_advanced = (kisilik == "İnternet Araştırmacısı (Ajan)")
-                internet_bilgisi = internette_ara(soru_girdisi, gelismis_mod=is_advanced)
-        else:
+        # Eğer sol menüde yapıştırılmış bir metin varsa internet aramasına hiç gerek kalmasın, doğrudan onu okusun
+        if yapistirilan_karar:
             internet_bilgisi = None
+            st.caption("⚡ Sol menüye yapıştırılan karar metni inceleniyor...")
+        else:
+            arama_kelimeleri = ["nedir", "kimdir", "araştır", "fiyatı", "haber", "açıkla", "anlat", "bilgi ver", ".com", ".gov"]
+            internet_gerekli = any(kelime in soru_girdisi.lower() for kelime in arama_kelimeleri)
+            if internet_gerekli:
+                with st.spinner("🌐 İnternet verileri taranıyor..."):
+                    internet_bilgisi = internette_ara(soru_girdisi)
+            else:
+                internet_bilgisi = None
 
+        # Karakter Talimatı
         if kisilik == "İnternet Araştırmacısı (Ajan)":
             karakter_talimati = (
-                "Sen son derece katı bir siber araştırma ve bilgi doğrulama uzmanısın. "
-                "Adım adım düşün: Sana sağlanan internet bilgilerini oku ve aranan veri metinde varsa çıkar. "
-                "Eğer aranan bilgi sağlanan metinlerde kesinlikle yoksa durumu uydurmadan açıkla. "
-                "Verdiğin somut verilerin sonuna web sitesi linkini parantez içinde yazacaksın."
+                "Sen son derece katı bir hukuk ve araştırma uzmanısın. "
+                "Eğer sana bir 'Kullanıcı Dosya/Karar İçeriği' sağlandıysa, soruları KESİNLİKLE o metne göre cevapla. "
+                "Metinde yazmayan hiçbir şeyi kafandan uydurma. Bilgi yoksa dürüstçe belirt."
             )
         else:
-            karakter_talimati = "Sen kibar, zeki ve yardımcı bir yapay zeka asistanısın. Cevaplarında uygun emojiler kullanmayı unutma."
+            karakter_talimati = "Sen kibar, zeki ve yardımcı bir yapay zeka asistanısın."
 
-        sistem_talimati = f"{karakter_talimati} İnternet bilgilerini ve geçmişi dikkate alarak cevap üret."
+        sistem_talimati = f"{karakter_talimati} Sağlanan güncel dökümanları ve geçmişi dikkate alarak cevap üret."
         gonderilecek_mesajlar = [{"role": "system", "content": sistem_talimati}]
         
-        if dosya_icerigi:
+        # EĞER YAPIŞTIRILAN METİN VARSA SİSTEME ENJEKTE EDİYORUZ
+        if yapistirilan_karar:
+            gonderilecek_mesajlar.append({"role": "system", "content": f"Kullanıcının Doğrudan Yapıştırdığı Karar İçeriği:\n{yapistirilan_karar}"})
+        elif dosya_icerigi:
             gonderilecek_mesajlar.append({"role": "system", "content": f"Dosya içeriği:\n{dosya_icerigi}"})
             
-        # Hafızadan sadece son 2 mesajı göndererek geçmiş yük birikmesini sıfırlıyoruz
         gonderilecek_mesajlar.extend(st.session_state.mesaj_gecmisi[-2:])
         
         if internet_bilgisi:
@@ -166,7 +152,7 @@ if soru_girdisi := st.chat_input("Mesajınızı buraya yazın..."):
             cevap = groq_istenci.chat.completions.create(
                 model="llama-3.3-70b-versatile",
                 messages=gonderilecek_mesajlar,
-                temperature=0.3
+                temperature=0.2
             )
             yanit = cevap.choices[0].message.content
             
@@ -174,12 +160,10 @@ if soru_girdisi := st.chat_input("Mesajınızı buraya yazın..."):
             st.session_state.mesaj_gecmisi.append({"role": "assistant", "content": yanit})
             
             ses_metni = re.sub(r'[^\w\s,.!?:\(\)\-\"\']', '', yanit)
-            
             with st.spinner("🔊 Ses dosyası hazırlanıyor..."):
                 tts = gTTS(text=ses_metni[:300], lang='tr', tld='com.tr')
                 tts.save("cevap.mp3")
                 st.audio("cevap.mp3", format="audio/mp3")
                 
         except Exception as e:
-            # Kullanıcıya çirkin terminal hatası göstermek yerine kibar bir uyarı basıyoruz
-            st.warning("⚠️ Arka arkaya çok yoğun döküman sorgulandı. Lütfen 5 saniye bekleyip mesajınızı tekrar gönderin.")
+            st.warning("⚠️ Küçük bir yoğunluk kısıtlaması oldu. Lütfen birkaç saniye sonra tekrar gönderin.")
