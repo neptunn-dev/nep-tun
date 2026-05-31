@@ -77,28 +77,42 @@ for mesaj in st.session_state.mesaj_gecmisi:
     with st.chat_message(mesaj["role"]):
         st.write(mesaj["content"])
 
-# Geliştirilmiş İnternet arama fonksiyonu
+# Akıllı ve Belirli Site Destekli İnternet Arama Fonksiyonu
 def internette_ara(soru, gelismis_mod=False):
     try:
+        # Metnin içinde .com, .gov, .net, .org gibi bir site uzantısı var mı kontrol et
+        site_bulucu = re.search(r'([a-zA-Z0-9.-]+\.(com|gov|net|org|edu|com\.tr|gov\.tr))', soru.lower())
+        
+        arama_parametreleri = {
+            "query": soru,
+            "max_results": 5 if gelismis_mod else 3
+        }
+        
         if gelismis_mod:
-            # Filtrelenmiş ve optimize edilmiş derin arama
-            arama_sonucu = tavily_istenci.search(
-                query=soru, 
-                search_depth="advanced", 
-                max_results=5, 
-                include_raw_content=True
-            )
-            metinler = []
-            for sonuc in arama_sonucu["results"]:
-                icerik = sonuc.get('raw_content') or sonuc.get('content') or "İçerik çekilemedi"
-                metinler.append(f"- {sonuc['title']}: {icerik[:600]}")
-            return "\n".join(metinler)
-        else:
-            arama_sonucu = tavily_istenci.search(query=soru, max_results=3)
-            metinler = [sonuc["content"] for sonuc in arama_sonucu["results"]]
-            return "\n".join(metinler)
-    except Exception:
-        return None
+            arama_parametreleri["search_depth"] = "advanced"
+            arama_parametreleri["include_raw_content"] = True
+
+        # Eğer kullanıcı bir site adı yazdıysa (Örn: yargitay.gov.tr'de 2018 kararı ara)
+        if site_bulucu:
+            hedef_site = site_bulucu.group(1)
+            # Arama teriminden site adını temizle ki aramayı bozmasın
+            temiz_soru = soru.lower().replace(hedef_site, "").strip()
+            arama_parametreleri["query"] = temiz_soru if temiz_soru else soru
+            arama_parametreleri["include_domains"] = [hedef_site]
+
+        arama_sonucu = tavily_istenci.search(**arama_parametreleri)
+        
+        metinler = []
+        for sonuc in arama_sonucu["results"]:
+            if gelismis_mod:
+                icerik = sonuc.get('raw_content') or sonuc.get('content') or "İçerik yok"
+                metinler.append(f"- {sonuc['title']} ({sonuc['url']}): {icerik[:700]}")
+            else:
+                metinler.append(f"- {sonuc['content']} (Kaynak: {sonuc['url']})")
+                
+        return "\n".join(metinler)
+    except Exception as e:
+        return f"Arama hatası: {str(e)}"
 
 # Kullanıcıdan girdi alma
 if soru_girdisi := st.chat_input("Mesajınızı buraya yazın..."):
@@ -113,23 +127,23 @@ if soru_girdisi := st.chat_input("Mesajınızı buraya yazın..."):
         if kisilik == "İnternet Araştırmacısı (Ajan)":
             internet_gerekli = True
         else:
-            arama_kelimeleri = ["nedir", "kimdir", "araştır", "fiyatı", "haber", "hava durumu", "ne zaman", "son dakika", "açıkla", "anlat", "bilgi ver"]
+            arama_kelimeleri = ["nedir", "kimdir", "araştır", "fiyatı", "haber", "hava durumu", "ne zaman", "son dakika", "açıkla", "anlat", "bilgi ver", ".com", ".gov", ".net"]
             internet_gerekli = any(kelime in soru_girdisi.lower() for kelime in arama_kelimeleri)
         
         if internet_gerekli:
-            with st.spinner("🌐 İnternet kaynakları derinlemesine taranıyor..."):
+            with St.spinner("🌐 Hedef kaynaklar derinlemesine taranıyor..."):
                 is_advanced = (kisilik == "İnternet Araştırmacısı (Ajan)")
                 internet_bilgisi = internette_ara(soru_girdisi, gelismis_mod=is_advanced)
         else:
             internet_bilgisi = None
 
-        # Kişiliklere göre sistem talimatı belirleme (Yalan söylemeyi engelleyen sert kurallar)
+        # Kişiliklere göre sistem talimatı belirleme
         if kisilik == "İnternet Araştırmacısı (Ajan)":
             karakter_talimati = (
                 "Sen son derece katı bir siber araştırma ve bilgi doğrulama uzmanısın. "
                 "Adım adım düşün: Önce sana sağlanan internet bilgilerini oku ve kullanıcının aradığı spesifik bilgi/karar numarası orada var mı kontrol et. "
                 "Eğer aranan karar numarası, yıl veya hukuki veri kaynaklarda AÇIKÇA geçmiyorsa, 'İnternet verilerinde bu kriterlere ait resmi bir karara ulaşılamadı' diyeceksiniz ve asla kafandan uydurmayacaksın. "
-                "Verdiğin her somut bilginin, rakamın veya dökümanın sonuna hangi başlığı/kaynağı kullandığını parantez içinde yazacaksın (Örn: [Kaynak: Yargıtay Bilgi Bankası]). "
+                "Verdiğin her somut bilginin, rakamın veya dökümanın sonuna hangi web sitesi linkini/kaynağını kullandığını parantez içinde açıkça yazacaksın. "
                 "Yalnızca kullanıcı senden hayali bir senaryo, hukuki bir yorum veya beyin fırtınası isterse yaratıcı analizler yapabilirsin."
             )
         elif kisilik == "Bilim İnsanı":
@@ -160,7 +174,7 @@ if soru_girdisi := st.chat_input("Mesajınızı buraya yazın..."):
             cevap = groq_istenci.chat.completions.create(
                 model="llama-3.3-70b-versatile",
                 messages=gonderilecek_mesajlar,
-                temperature=0.3  # Hem uydurmayı frenler hem de hayal gücünü tamamen öldürmez!
+                temperature=0.3
             )
             yanit = cevap.choices[0].message.content
             
