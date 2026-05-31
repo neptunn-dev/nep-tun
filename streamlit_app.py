@@ -36,13 +36,6 @@ with st.sidebar:
     
     st.write("---")
     
-    # METİN YAPIŞTIRMA ALANI
-    st.subheader("📝 İnceleme Metni Yapıştır")
-    st.caption("İnternette bulunamayan uzun metinleri buraya yapıştırıp aşağıdan soru sorabilirsiniz:")
-    yapistirilan_metin = st.text_area("Metin İçeriği:", height=250, placeholder="Uzun metni buraya yapıştırın...")
-    
-    st.write("---")
-    
     st.subheader("💾 Raporu İndir")
     if st.session_state.mesaj_gecmisi:
         sohbet_metni = ""
@@ -57,16 +50,6 @@ with st.sidebar:
             mime="text/plain",
             use_container_width=True
         )
-        
-    # Dosya Yükleme Alanı
-    yuklenen_dosya = st.file_uploader("Veya metin dosyası yükleyin:", type=["txt"])
-    dosya_icerigi = ""
-    if yuklenen_dosya is not None:
-        try:
-            dosya_icerigi = yuklenen_dosya.read().decode("utf-8")
-            st.success("Dosya başarıyla okundu!")
-        except Exception:
-            st.error("Dosya okunurken bir hata oluştu.")
 
 # Ana Sayfa Başlıkları
 st.title("🚀 Mega Yapay Zeka İstasyonu")
@@ -100,48 +83,52 @@ def internette_ara(soru, gelismis_mod=False):
     except Exception:
         return None
 
-# --- ÖZEL MOD: İNTERNET ARAŞTIRMACISI İÇİN YARGITAY ANALİZ PANELİ ---
-hukuk_metni = ""
-aktif_analiz_metni = ""
+# --- ORTAK METİN ALANI (KİŞİLİĞE GÖRE DEĞİŞİR) ---
+yapistirilan_metin = ""
 
 if kisilik == "İnternet Araştırmacısı (Ajan)":
     st.info("⚖️ Yargıtay ve Hukuki Karar Analiz Paneli Aktif!")
     
     st.markdown("""
     **Karar Analiz Adımları:**
-    1. [Yargıtay Karar Arama Sitesi'ne Gidin](https://karararama.yargitay.gov.tr/)
-    2. İncelemek istediğiniz kararın içeriğini veya kararları kopyalayın.
-    3. Aşağıdaki kutuya yapıştırın. Birden fazla karar varsa sistem size seçtirecektir!
+    1. İncelemek istediğiniz kararları kopyalayın.
+    2. Aşağıdaki büyük kutuya yapıştırın. Birden fazla karar varsa sistem size seçtirecektir!
     """)
     
-    st.subheader("⚖️ Karar Metnini Yapıştır")
     hukuk_metni = st.text_area(
         "Kopyaladığınız hukuki kararları buraya ekleyin:", 
-        height=200, 
+        height=250, 
         placeholder="Yargıtay ilam metinlerini buraya yapıştırın...",
-        key="yargitay_karar_kutusu"
+        key="ana_yargitay_kutusu"
     )
     
     if hukuk_metni:
-        # Metni "T.C." veya "YARGITAY" kelimelerinden bölerek birden fazla karar var mı diye bakıyoruz
-        karar_parcaları = [p.strip() for p in re.split(r'(?=T\.C\.|YARGITAY)', hukuk_metni) if len(p.strip()) > 100]
+        # Daha güçlü bir bölme mantığı: Büyük-küçük harf duyarsız YARGITAY veya T.C. görünce böler
+        karar_parcalari = [p.strip() for p in re.split(r'(?i)(?=T\.C\.|YARGITAY)', hukuk_metni) if len(p.strip()) > 30]
         
-        if len(karar_parcaları) > 1:
-            st.warning(f"📋 Kutuda {len(karar_parcaları)} farklı karar tespit ettim!")
+        # Eğer tek parça çıktıysa ama içinde birden fazla karar barındırıyorsa alternatif bölme
+        if len(karar_parcalari) <= 1 and hukuk_metni.count("Esas No") > 1:
+            karar_parcalari = [p.strip() for p in re.split(r'(?i)(?=Esas No)', hukuk_metni) if len(p.strip()) > 30]
+
+        if len(karar_parcalari) > 1:
+            st.warning(f"📋 Kutuda {len(karar_parcalari)} farklı karar tespit ettim!")
             
-            # Seçenek listesi oluşturuyoruz
             secenekler = {}
-            for i, parca in enumerate(karar_parcaları):
-                # Kararın ilk 60 karakterini başlık yapıyoruz
-                baslik = f"{i+1}. Karar: {parca[:60].replace('\n', ' ')}..."
+            for i, parca in enumerate(karar_parcalari):
+                # Başlığı temizle ve ilk 70 karakteri al
+                temiz_baslik = re.sub(r'\s+', ' ', parca).strip()
+                baslik = f"⚖️ {i+1}. Karar: {temiz_baslik[:70]}..."
                 secenekler[baslik] = parca
                 
             secilen_baslik = st.radio("Baba, hangisini analiz edeyim? Seçebilirsin:", list(secenekler.keys()))
-            aktif_analiz_metni = secenekler[secilen_baslik]
+            yapistirilan_metin = secenekler[secilen_baslik]
         else:
-            aktif_analiz_metni = hukuk_metni
-            
-        yapistirilan_metin = aktif_analiz_metni
+            yapistirilan_metin = hukuk_metni
+else:
+    # Diğer kişilikler için sol menüde standart metin alanı kalır
+    with st.sidebar:
+        st.subheader("📝 İnceleme Metni Yapıştır")
+        yapistirilan_metin = st.text_area("Metin İçeriği:", height=200, placeholder="Uzun metni buraya yapıştırın...", key="standart_kutu")
 
 st.write("---")
 
@@ -160,7 +147,7 @@ if soru_girdisi := st.chat_input("Mesajınızı buraya yazın..."):
     with st.chat_message("assistant"):
         if yapistirilan_metin:
             internet_bilgisi = None
-            st.caption("⚡ Seçilen veya hafızaya alınan karar inceleniyor...")
+            st.caption("⚡ Seçilen karar metni yapay zeka tarafından inceleniyor...")
         else:
             arama_kelimeleri = ["nedir", "kimdir", "araştır", "fiyatı", "haber", "açıkla", "anlat", "bilgi ver", ".com", ".gov"]
             internet_gerekli = any(kelime in soru_girdisi.lower() for kelime in arama_kelimeleri)
@@ -186,9 +173,7 @@ if soru_girdisi := st.chat_input("Mesajınızı buraya yazın..."):
         gonderilecek_mesajlar = [{"role": "system", "content": sistem_talimati}]
         
         if yapistirilan_metin:
-            gonderilecek_mesajlar.append({"role": "system", "content": f"Kullanıcının Doğrudan Yapıştırdığı Metin İçeriği:\n{yapistirilan_metin}"})
-        elif dosya_icerigi:
-            gonderilecek_mesajlar.append({"role": "system", "content": f"Dosya içeriği:\n{dosya_icerigi}"})
+            gonderilecek_mesajlar.append({"role": "system", "content": f"Kullanıcının Doğrudan Yapıştırdığı ve Seçtiği Karar Metni:\n{yapistirilan_metin}"})
             
         gonderilecek_mesajlar.extend(st.session_state.mesaj_gecmisi[-2:])
         
