@@ -76,28 +76,35 @@ st.write(f"Şu anki mod: **{kisilik}** | İnternette arar, yapıştırılan meti
 async def yargitay_karar_cek(daire_adi, esas_no, karar_no):
     try:
         async with async_playwright() as p:
-            # Artık sistemde paketler olacağı için direkt başlatıyoruz
             browser = await p.chromium.launch(
                 headless=True,
                 args=[
                     "--no-sandbox", 
                     "--disable-dev-shm-usage",
-                    "--disable-gpu"
+                    "--disable-gpu",
+                    "--disable-blink-features=AutomationControlled" # Bot olduğunu gizleyen kritik ayar
                 ]
             )
-            page = await browser.new_page()
             
-            # Gerçek kullanıcı taklidi
-            await page.set_extra_http_headers({
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            })
+            # Gerçek bir Windows Chrome tarayıcısı süsü veriyoruz
+            context = await browser.new_context(
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+                viewport={"width": 1920, "height": 1080}
+            )
+            page = await context.new_page()
             
-            await page.goto("https://karararama.yargitay.gov.tr/", timeout=60000)
-            await page.wait_for_load_state("networkidle")
+            # wait_until="commit" yaparak sayfanın resimlerinin/reklamlarının yüklenmesini beklemeden içeriğe dalıyoruz
+            await page.goto("https://karararama.yargitay.gov.tr/", timeout=30000, wait_until="commit")
+            
+            # Sitenin ilk ana elementinin yüklenmesi için maks 10 saniye bekle diyoruz
+            await page.wait_for_selector("body", timeout=10000)
             
             title = await page.title()
             await browser.close()
             return f"🎉 İnanılmaz! Yargıtay Canlı Bağlantısı Başarılı. Sayfa Başlığı: {title}"
+            
+    except Exception as e:
+        return f"Yargıtay bağlantı hatası oluştu: {str(e)}"
             
     except Exception as e:
         return f"Yargıtay bağlantı hatası oluştu: {str(e)}"
