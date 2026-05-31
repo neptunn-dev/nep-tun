@@ -77,10 +77,23 @@ st.write(f"Şu anki mod: **{kisilik}** | İnternette arar, yapıştırılan meti
 async def yargitay_karar_cek(daire_adi, esas_no, karar_no):
     try:
         async with async_playwright() as p:
-            browser = await p.chromium.launch(
-                headless=True,
-                args=["--no-sandbox", "--disable-dev-shm-usage"]
-            )
+            try:
+                # Önce tarayıcıyı normal şekilde başlatmayı deniyoruz
+                browser = await p.chromium.launch(
+                    headless=True,
+                    args=["--no-sandbox", "--disable-dev-shm-usage"]
+                )
+            except Exception as launch_error:
+                # Eğer tarayıcı yok hatası alırsak, sunucuya otomatik olarak kurduruyoruz:
+                st.warning("⚙️ Sunucuya tarayıcı bileşenleri ilk defa kuruluyor, lütfen bekleyin...")
+                os.system("playwright install chromium")
+                
+                # Kurulum bittikten sonra tekrar başlatmayı deniyoruz
+                browser = await p.chromium.launch(
+                    headless=True,
+                    args=["--no-sandbox", "--disable-dev-shm-usage"]
+                )
+
             page = await browser.new_page()
             await page.goto("https://karararama.yargitay.gov.tr/", timeout=60000)
             await page.wait_for_load_state("networkidle")
