@@ -22,14 +22,12 @@ if "mesaj_gecmisi" not in st.session_state:
 with st.sidebar:
     st.header("⚙️ Kontrol Paneli")
     
-    # Sohbeti Temizle Butonu
     if st.button("🗑️ Sohbeti Temizle", use_container_width=True):
         st.session_state.mesaj_gecmisi = []
         st.rerun()
         
     st.write("---")
     
-    # Kişilik Seçme Menüsü
     kisilik = st.selectbox(
         "🤖 Asistan Kişiliği Seçin:",
         ["Standart Asistan", "İnternet Araştırmacısı (Ajan)", "Bilim İnsanı", "Mahalle Arkadaşı (Kanka)", "Yazılımcı Mentoru"]
@@ -37,7 +35,6 @@ with st.sidebar:
     
     st.write("---")
     
-    # Sohbet Geçmişini İndirme (Export)
     st.subheader("💾 Raporu İndir")
     if st.session_state.mesaj_gecmisi:
         sohbet_metni = ""
@@ -57,7 +54,6 @@ with st.sidebar:
         
     st.write("---")
     
-    # PDF / Dosya Yükleme Alanı
     st.subheader("📁 Döküman Analizi")
     yuklenen_dosya = st.file_uploader("Bir metin dosyası yükleyin:", type=["txt"])
     dosya_icerigi = ""
@@ -72,22 +68,20 @@ with st.sidebar:
 st.title("🚀 Mega Yapay Zeka İstasyonu")
 st.write(f"Şu anki mod: **{kisilik}** | Geçmişi hatırlar, internette arar, dosya okur ve sesli konuşur!")
 
-# Eski mesajları ekranda göster
 for mesaj in st.session_state.mesaj_gecmisi:
     with st.chat_message(mesaj["role"]):
         st.write(mesaj["content"])
 
-# Maksimum Veri Çeken Derin İnternet Arama Fonksiyonu
+# KOTA DOSTU - Sıkıştırılmış İnternet Arama Fonksiyonu
 def internette_ara(soru, gelismis_mod=False):
     try:
         site_bulucu = re.search(r'([a-zA-Z0-9.-]+\.(com|gov|net|org|edu|com\.tr|gov\.tr))', soru.lower())
         
-        # Arama ayarlarını maksimum derinliğe çekiyoruz
+        # En iyi ve en nokta atışı 2 sonucu çekerek kotayı koruyoruz
         arama_parametreleri = {
             "query": soru,
-            "max_results": 5,
+            "max_results": 2, 
             "search_depth": "advanced",
-            "include_answer": True,
             "include_raw_content": True
         }
 
@@ -106,22 +100,20 @@ def internette_ara(soru, gelismis_mod=False):
 
         arama_sonucu = tavily_istenci.search(**arama_parametreleri)
         
-        # B PLANI: Özel site araması boş dönerse genele yay ve engelleri aş
         if not arama_sonucu.get("results") and site_bulucu:
             arama_parametreleri.pop("include_domains", None)
             arama_parametreleri["query"] = soru
             arama_sonucu = tavily_istenci.search(**arama_parametreleri)
 
         metinler = []
-        
-        # Tavily'nin kendi hazır akıllı cevabı varsa en başa ekle
-        if arama_sonucu.get("answer"):
-            metinler.append(f"[Özet Önbilgi]: {arama_sonucu['answer']}\n")
-            
         for sonuc in arama_sonucu["results"]:
-            # Karakter sınırını 3000'e çıkararak sayfa içeriğini kırpmadan alıyoruz
             icerik = sonuc.get('raw_content') or sonuc.get('content') or "İçerik yok"
-            metinler.append(f"- {sonuc['title']} ({sonuc['url']}): {icerik[:3000]}")
+            
+            # Tüm gereksiz boşlukları siliyoruz
+            icerik_temiz = re.sub(r'\s+', ' ', icerik).strip()
+            
+            # KOTA DOSTU: Sayfa başına 900 karakter sınırı (Toplamda maksimum 1800 karakter gider)
+            metinler.append(f"- {sonuc['title']} ({sonuc['url']}): {icerik_temiz[:900]}")
                 
         return "\n".join(metinler)
     except Exception as e:
@@ -151,33 +143,24 @@ if soru_girdisi := st.chat_input("Mesajınızı buraya yazın..."):
         if kisilik == "İnternet Araştırmacısı (Ajan)":
             karakter_talimati = (
                 "Sen son derece katı bir siber araştırma ve bilgi doğrulama uzmanısın. "
-                "Adım adım düşün: Sana sağlanan geniş internet dökümanlarını baştan sona tara. "
-                "Eğer aranan kelimeler, karar numaraları veya olay metinde gizliyse bul ve çıkar. "
-                "Eğer aranan bilgi sağlanan metinlerde kesinlikle yoksa durumu dürüstçe açıkla ama uydurma. "
-                "Verdiğin bilgilerin yanına hangi web sitesi linkini kullandığını parantez içinde açıkça yazacaksın."
+                "Adım adım düşün: Sana sağlanan internet bilgilerini oku ve aranan veri metinde varsa çıkar. "
+                "Eğer aranan bilgi sağlanan metinlerde kesinlikle yoksa durumu uydurmadan açıkla. "
+                "Verdiğin somut verilerin sonuna web sitesi linkini parantez içinde yazacaksın."
             )
-        elif kisilik == "Bilim İnsanı":
-            karakter_talimati = "Sen ciddi, akademik, tamamen bilimsel verilere dayanan ve detaylı açıklamalar yapan bir bilim insanısın. Cevaplarında bolca bilimsel emoji kullan."
-        elif kisilik == "Mahalle Arkadaşı (Kanka)":
-            karakter_talimati = "Sen kullanıcının çok yakın bir mahalle arkadaşısın. Samimi, esprili konuş, 'kanka', 'reis', 'brom' gibi kelimeler kullan, asla resmi olma. Bol bol gülen ve eğlenceli emojiler koy."
-        elif kisilik == "Yazılımcı Mentoru":
-            karakter_talimati = "Sen tecrübeli bir yazılım liderisin. Kullanıcıya kodlama konusunda rehberlik et, motive et ve teknik ama anlaşılır konuş. Kod blokları ve teknoloji emojileri kullan."
         else:
             karakter_talimati = "Sen kibar, zeki ve yardımcı bir yapay zeka asistanısın. Cevaplarında uygun emojiler kullanmayı unutma."
 
-        sistem_talimati = (
-            f"{karakter_talimati} Sana sağlanan internet bilgilerini ve konuşma geçmişini dikkate alarak cevap üret."
-        )
-        
+        sistem_talimati = f"{karakter_talimati} İnternet bilgilerini ve geçmişi dikkate alarak cevap üret."
         gonderilecek_mesajlar = [{"role": "system", "content": sistem_talimati}]
         
         if dosya_icerigi:
-            gonderilecek_mesajlar.append({"role": "system", "content": f"Kullanıcının yüklediği dosya içeriği şudur:\n{dosya_icerigi}"})
+            gonderilecek_mesajlar.append({"role": "system", "content": f"Dosya içeriği:\n{dosya_icerigi}"})
             
-        gonderilecek_mesajlar.extend(st.session_state.mesaj_gecmisi)
+        # KOTA DOSTU: Hafızadan sadece son 4 mesajı gönderiyoruz (Eski yükleri arkada bırakıyoruz)
+        gonderilecek_mesajlar.extend(st.session_state.mesaj_gecmisi[-4:])
         
         if internet_bilgisi:
-            gonderilecek_mesajlar[-1]["content"] += f"\n\n(Güncel İnternet Bilgisi:\n{internet_bilgisi})"
+            gonderilecek_mesajlar[-1]["content"] += f"\n\n(İnternet Bilgisi:\n{internet_bilgisi})"
             
         try:
             cevap = groq_istenci.chat.completions.create(
@@ -198,4 +181,4 @@ if soru_girdisi := st.chat_input("Mesajınızı buraya yazın..."):
                 st.audio("cevap.mp3", format="audio/mp3")
                 
         except Exception as e:
-            st.error(f"Bir hata oluştu: {e}")
+            st.error(f"Sistem yoğunluğu veya kota sınırı: {e}")
