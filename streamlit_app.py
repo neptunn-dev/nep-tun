@@ -1,5 +1,4 @@
 import asyncio
-from playwright.async_api import async_playwright
 import streamlit as st
 from groq import Groq
 from tavily import TavilyClient
@@ -37,7 +36,7 @@ with st.sidebar:
     
     st.write("---")
     
-    # METİN YAPIŞTIRMA ALANI (DÜMDÜZ METİN YAPTIK)
+    # METİN YAPIŞTIRMA ALANI
     st.subheader("📝 İnceleme Metni Yapıştır")
     st.caption("İnternette bulunamayan uzun metinleri buraya yapıştırıp aşağıdan soru sorabilirsiniz:")
     yapistirilan_metin = st.text_area("Metin İçeriği:", height=250, placeholder="Uzun metni buraya yapıştırın...")
@@ -73,11 +72,6 @@ with st.sidebar:
 st.title("🚀 Mega Yapay Zeka İstasyonu")
 st.write(f"Şu anki mod: **{kisilik}** | İnternette arar, yapıştırılan metinleri doğrudan inceler!")
 
-def hukuk_karar_analizi(karar_metni):
-    if not karar_metni:
-        return "Lütfen analiz edilmek üzere bir karar metni yapıştırın."
-    return None 
-
 # KOTA DOSTU ARAMA FONKSİYONU
 def internette_ara(soru, gelismis_mod=False):
     try:
@@ -106,53 +100,8 @@ def internette_ara(soru, gelismis_mod=False):
     except Exception:
         return None
 
-# --- ÖZEL MOD: İNTERNET ARAŞTIRMACISI İÇİN YARGITAY PANELİ ---
-if kisilik == "İnternet Araştırmacısı (Ajan)":
-    st.info("⚖️ Yargıtay Canlı Karar Sorgulama Paneli Aktif!")
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        daire = st.text_input("Daire Adı", value="11. Hukuk Dairesi")
-    with col2:
-        esas = st.text_input("Esas No (Yıl/Sıra)", value="2019/4530")
-    with col3:
-        karar = st.text_input("Karar No (Yıl/Sıra)", value="2021/4133")
-        
-    if st.button("🔍 Playwright ile Yargıtay'ı Canlı Sorgula", type="primary"):
-        with st.spinner("Playwright arka planda Yargıtay sitesine bağlanıyor..."):
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            sorgu_sonucu = loop.run_until_complete(yargitay_karar_cek(daire, esas, karar))
-            st.success(sorgu_sonucu)
-
-st.write("---")
-
-# Eski Mesajları Ekrana Basma
-for mesaj in st.session_state.mesaj_gecmisi:
-    with st.chat_message(mesaj["role"]):
-        st.write(mesaj["content"])
-
-# Kullanıcıdan girdi alma
-if soru_girdisi := st.chat_input("Mesajınızı buraya yazın..."):
-    
-    with st.chat_message("user"):
-        st.write(soru_girdisi)
-    st.session_state.mesaj_gecmisi.append({"role": "user", "content": soru_girdisi})
-
-    with st.chat_message("assistant"):
-        if yapistirilan_metin:
-            internet_bilgisi = None
-            st.caption("⚡ Sol menüye yapıştırılan metin inceleniyor...")
-        else:
-            arama_kelimeleri = ["nedir", "kimdir", "araştır", "fiyatı", "haber", "açıkla", "anlat", "bilgi ver", ".com", ".gov"]
-            internet_gerekli = any(kelime in soru_girdisi.lower() for kelime in arama_kelimeleri)
-            if internet_gerekli:
-                with st.spinner("🌐 İnternet verileri taranıyor..."):
-                    internet_bilgisi = internette_ara(soru_girdisi)
-            else:
-                internet_bilgisi = None
-
-        # Karakter Talimatı
-       # --- ÖZEL MOD: İNTERNET ARAŞTIRMACISI İÇİN YARGITAY ANALİZ PANELİ ---
+# --- ÖZEL MOD: İNTERNET ARAŞTIRMACISI İÇİN YARGITAY ANALİZ PANELİ ---
+hukuk_metni = ""
 if kisilik == "İnternet Araştırmacısı (Ajan)":
     st.info("⚖️ Yargıtay ve Hukuki Karar Analiz Paneli Aktif!")
     
@@ -171,10 +120,45 @@ if kisilik == "İnternet Araştırmacısı (Ajan)":
         key="yargitay_karar_kutusu"
     )
     
-    # Kullanıcı metin yapıştırırsa arka plan hafızasına aktarır
     if hukuk_metni:
         yapistirilan_metin = hukuk_metni
-            )
+
+st.write("---")
+
+# Eski Mesajları Ekrana Basma
+for mesaj in st.session_state.mesaj_gecmisi:
+    with st.chat_message(mesaj["role"]):
+        st.write(mesaj["content"])
+
+# Kullanıcıdan girdi alma ve işletme döngüsü
+if soru_girdisi := st.chat_input("Mesajınızı buraya yazın..."):
+    
+    with st.chat_message("user"):
+        st.write(soru_girdisi)
+    st.session_state.mesaj_gecmisi.append({"role": "user", "content": soru_girdisi})
+
+    with st.chat_message("assistant"):
+        if yapistirilan_metin:
+            internet_bilgisi = None
+            st.caption("⚡ Hafızaya alınan metin/karar inceleniyor...")
+        else:
+            arama_kelimeleri = ["nedir", "kimdir", "araştır", "fiyatı", "haber", "açıkla", "anlat", "bilgi ver", ".com", ".gov"]
+            internet_gerekli = any(kelime in soru_girdisi.lower() for kelime in arama_kelimeleri)
+            if internet_gerekli:
+                with st.spinner("🌐 İnternet verileri taranıyor..."):
+                    internet_bilgisi = internette_ara(soru_girdisi)
+            else:
+                internet_bilgisi = None
+
+        # Karakter Kişilik Ayarları
+        if kisilik == "İnternet Araştırmacısı (Ajan)":
+            karakter_talimati = "Sen uzman bir hukuk dedektifi ve internet araştırmacısısın. Kararları hukuki terimlerle analiz et."
+        elif kisilik == "Bilim İnsanı":
+            karakter_talimati = "Sen analitik düşünen, verilere dayalı konuşan bir bilim insanısın."
+        elif kisilik == "Mahalle Arkadaşı (Kanka)":
+            karakter_talimati = "Sen samimi, cana yakın ve çok içten bir mahalle arkadaşısın. Argoya kaçmadan sıcak bir dille konuş."
+        elif kisilik == "Yazılımcı Mentoru":
+            karakter_talimati = "Sen junior yazılımcılara rehberlik eden kıdemli bir yazılımcı mentorusun."
         else:
             karakter_talimati = "Sen kibar, zeki ve yardımcı bir yapay zeka asistanısın."
 
