@@ -39,7 +39,6 @@ def otomatik_arama_kutusu_secici(soru_metni):
             "id": "detayli_arama_input"
         }
     else:
-        # Düz, basit bir kelime veya arama ise
         return {
             "kutu": "Normal Arama Kutusu (Hızlı Sorgu)",
             "renk": "blue",
@@ -168,9 +167,9 @@ if soru_girdisi := st.chat_input("Mesajınızı buraya yazın..."):
         st.write(soru_girdisi)
     st.session_state.mesaj_gecmisi.append({"role": "user", "content": soru_girdisi})
 
-    # --- SİMÜLASYON: BABANIN YAZDIĞI SORGUDAN KUTU SEÇİMİ GÖSTERME ---
+    # --- ARKA PLAN SEÇİM MANTIĞI SESSİZCE ÇALIŞIR ---
+    # İleride Selenium bota bağlandığında bu değişken kullanılacak, ekrana bir şey basılmayacak.
     karar_durumu = otomatik_arama_kutusu_secici(soru_girdisi)
-    st.markdown(f":{karar_durumu['renk']}[{karar_durumu['ikon']} Otomatik Bot Yönlendirmesi: Arka planda **{karar_durumu['kutu']}** seçildi! (Hedef Element ID: `{karar_durumu['id']}`) ]")
 
     with st.chat_message("assistant"):
         if yapistirilan_metin:
@@ -187,7 +186,7 @@ if soru_girdisi := st.chat_input("Mesajınızı buraya yazın..."):
 
         # Karakter Kişilik Ayarları
         if kisilik == "İnternet Araştırmacısı (Ajan)":
-            karakter_talimati = "Sen uzman bir hukuk dedektifi ve internet araştırmacısısın. Kararları hukuki terimlerle analiz et."
+            karakter_talimati = "Sen uzman bir hukuk dedektifi and internet araştırmacısısın. Kararları hukuki terimlerle analiz et."
         elif kisilik == "Bilim İnsanı":
             karakter_talimati = "Sen analitik düşünen, verilere dayalı konuşan bir bilim insanısın."
         elif kisilik == "Mahalle Arkadaşı (Kanka)":
