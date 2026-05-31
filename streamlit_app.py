@@ -73,33 +73,43 @@ with st.sidebar:
 st.title("🚀 Mega Yapay Zeka İstasyonu")
 st.write(f"Şu anki mod: **{kisilik}** | İnternette arar, yapıştırılan metinleri doğrudan inceler!")
 
-# --- PLAYWRIGHT ASENKRON FONKSİYONU (DOĞRU YERE ALINDI) ---
 async def yargitay_karar_cek(daire_adi, esas_no, karar_no):
     try:
         async with async_playwright() as p:
             try:
-                # Önce tarayıcıyı normal şekilde başlatmayı deniyoruz
+                # 1. İlk deneme: Tarayıcıyı başlatmayı deniyoruz
                 browser = await p.chromium.launch(
                     headless=True,
                     args=["--no-sandbox", "--disable-dev-shm-usage"]
                 )
             except Exception as launch_error:
-                # Eğer tarayıcı yok hatası alırsak, sunucuya otomatik olarak kurduruyoruz:
-                st.warning("⚙️ Sunucuya tarayıcı bileşenleri ilk defa kuruluyor, lütfen bekleyin...")
-                os.system("playwright install chromium")
+                # 2. Eğer tarayıcı eksikse veya sistem kütüphanesi hatası verirse tetiklenir:
+                st.warning("⚙️ Sunucu işletim sistemi için gerekli tarayıcı bileşenleri kuruluyor, bu işlem ilk sefere mahsus 20-30 saniye sürebilir...")
                 
-                # Kurulum bittikten sonra tekrar başlatmayı deniyoruz
+                # Hem tarayıcıyı hem de Linux sistem bağımlılıklarını (deps) yüklüyoruz
+                os.system("playwright install chromium")
+                os.system("playwright install-deps")
+                
+                # 3. Bileşenler kurulduktan sonra tekrar başlatmayı deniyoruz
                 browser = await p.chromium.launch(
                     headless=True,
                     args=["--no-sandbox", "--disable-dev-shm-usage"]
                 )
 
             page = await browser.new_page()
+            
+            # Robot engeline takılmamak ve insan taklidi yapmak için kullanıcı kimliği (User-Agent) ekliyoruz
+            await page.set_extra_http_headers({
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            })
+            
             await page.goto("https://karararama.yargitay.gov.tr/", timeout=60000)
             await page.wait_for_load_state("networkidle")
+            
             title = await page.title()
             await browser.close()
-            return f"Yargıtay Canlı Bağlantı Testi Başarılı! Sayfa Başlığı: {title}"
+            return f"🎉 Muhteşem! Yargıtay Canlı Bağlantısı Başarılı. Sayfa Başlığı: {title}"
+            
     except Exception as e:
         return f"Yargıtay bağlantı hatası oluştu: {str(e)}"
 
