@@ -76,29 +76,18 @@ st.write(f"Şu anki mod: **{kisilik}** | İnternette arar, yapıştırılan meti
 async def yargitay_karar_cek(daire_adi, esas_no, karar_no):
     try:
         async with async_playwright() as p:
-            try:
-                # 1. İlk deneme: Tarayıcıyı başlatmayı deniyoruz
-                browser = await p.chromium.launch(
-                    headless=True,
-                    args=["--no-sandbox", "--disable-dev-shm-usage"]
-                )
-            except Exception as launch_error:
-                # 2. Eğer tarayıcı eksikse veya sistem kütüphanesi hatası verirse tetiklenir:
-                st.warning("⚙️ Sunucu işletim sistemi için gerekli tarayıcı bileşenleri kuruluyor, bu işlem ilk sefere mahsus 20-30 saniye sürebilir...")
-                
-                # Hem tarayıcıyı hem de Linux sistem bağımlılıklarını (deps) yüklüyoruz
-                os.system("playwright install chromium")
-                os.system("playwright install-deps")
-                
-                # 3. Bileşenler kurulduktan sonra tekrar başlatmayı deniyoruz
-                browser = await p.chromium.launch(
-                    headless=True,
-                    args=["--no-sandbox", "--disable-dev-shm-usage"]
-                )
-
+            # Artık sistemde paketler olacağı için direkt başlatıyoruz
+            browser = await p.chromium.launch(
+                headless=True,
+                args=[
+                    "--no-sandbox", 
+                    "--disable-dev-shm-usage",
+                    "--disable-gpu"
+                ]
+            )
             page = await browser.new_page()
             
-            # Robot engeline takılmamak ve insan taklidi yapmak için kullanıcı kimliği (User-Agent) ekliyoruz
+            # Gerçek kullanıcı taklidi
             await page.set_extra_http_headers({
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
             })
@@ -108,7 +97,10 @@ async def yargitay_karar_cek(daire_adi, esas_no, karar_no):
             
             title = await page.title()
             await browser.close()
-            return f"🎉 Muhteşem! Yargıtay Canlı Bağlantısı Başarılı. Sayfa Başlığı: {title}"
+            return f"🎉 İnanılmaz! Yargıtay Canlı Bağlantısı Başarılı. Sayfa Başlığı: {title}"
+            
+    except Exception as e:
+        return f"Yargıtay bağlantı hatası oluştu: {str(e)}"
             
     except Exception as e:
         return f"Yargıtay bağlantı hatası oluştu: {str(e)}"
