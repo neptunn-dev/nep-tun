@@ -73,47 +73,10 @@ with st.sidebar:
 st.title("🚀 Mega Yapay Zeka İstasyonu")
 st.write(f"Şu anki mod: **{kisilik}** | İnternette arar, yapıştırılan metinleri doğrudan inceler!")
 
-def hukuk_karar_analizi(karar_metni, soru):
+def hukuk_karar_analizi(karar_metni):
     if not karar_metni:
         return "Lütfen analiz edilmek üzere bir karar metni yapıştırın."
-    return None
-    try:
-        async with async_playwright() as p:
-            browser = await p.chromium.launch(
-                headless=True,
-                args=[
-                    "--no-sandbox", 
-                    "--disable-dev-shm-usage",
-                    "--disable-gpu",
-                    "--disable-blink-features=AutomationControlled" # Bot olduğunu gizleyen kritik ayar
-                ]
-            )
-            
-            # Gerçek bir Windows Chrome tarayıcısı süsü veriyoruz
-            context = await browser.new_context(
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
-                viewport={"width": 1920, "height": 1080}
-            )
-            page = await context.new_page()
-            
-            # wait_until="commit" yaparak sayfanın resimlerinin/reklamlarının yüklenmesini beklemeden içeriğe dalıyoruz
-            await page.goto("https://karararama.yargitay.gov.tr/", timeout=30000, wait_until="commit")
-            
-            # Sitenin ilk ana elementinin yüklenmesi için maks 10 saniye bekle diyoruz
-            await page.wait_for_selector("body", timeout=10000)
-            
-            title = await page.title()
-            await browser.close()
-            return f"🎉 İnanılmaz! Yargıtay Canlı Bağlantısı Başarılı. Sayfa Başlığı: {title}"
-            
-    except Exception as e:
-        return f"Yargıtay bağlantı hatası oluştu: {str(e)}"
-            
-    except Exception as e:
-        return f"Yargıtay bağlantı hatası oluştu: {str(e)}"
-            
-    except Exception as e:
-        return f"Yargıtay bağlantı hatası oluştu: {str(e)}"
+    return None 
 
 # KOTA DOSTU ARAMA FONKSİYONU
 def internette_ara(soru, gelismis_mod=False):
@@ -189,11 +152,28 @@ if soru_girdisi := st.chat_input("Mesajınızı buraya yazın..."):
                 internet_bilgisi = None
 
         # Karakter Talimatı
-        if kisilik == "İnternet Araştırmacısı (Ajan)":
-            karakter_talimati = (
-                "Sen son derece katı bir araştırma ve metin analiz uzmanısın. "
-                "Eğer sana bir 'Kullanıcı Metin İçeriği' sağlandıysa, soruları KESİNLİKLE o metne göre cevapla. "
-                "Metinde yazmayan hiçbir şeyi kafandan uydurma. Bilgi yoksa dürüstçe belirt."
+       # --- ÖZEL MOD: İNTERNET ARAŞTIRMACISI İÇİN YARGITAY ANALİZ PANELİ ---
+if kisilik == "İnternet Araştırmacısı (Ajan)":
+    st.info("⚖️ Yargıtay ve Hukuki Karar Analiz Paneli Aktif!")
+    
+    st.markdown("""
+    **Karar Analiz Adımları:**
+    1. [Yargıtay Karar Arama Sitesi'ne Gidin](https://karararama.yargitay.gov.tr/)
+    2. İncelemek istediğiniz kararın içeriğini kopyalayın.
+    3. Aşağıdaki kutuya yapıştırın ve ardından en alttaki sohbet kutusundan yapay zekaya dilediğiniz soruyu sorun!
+    """)
+    
+    st.subheader("⚖️ Karar Metnini Yapıştır")
+    hukuk_metni = st.text_area(
+        "Kopyaladığınız hukuki kararı buraya ekleyin:", 
+        height=200, 
+        placeholder="Yargıtay ilam metnini buraya yapıştırın...",
+        key="yargitay_karar_kutusu"
+    )
+    
+    # Kullanıcı metin yapıştırırsa arka plan hafızasına aktarır
+    if hukuk_metni:
+        yapistirilan_metin = hukuk_metni
             )
         else:
             karakter_talimati = "Sen kibar, zeki ve yardımcı bir yapay zeka asistanısın."
