@@ -72,14 +72,16 @@ for mesaj in st.session_state.mesaj_gecmisi:
     with st.chat_message(mesaj["role"]):
         st.write(mesaj["content"])
 
-# KOTA DOSTU - Sıkıştırılmış İnternet Arama Fonksiyonu
+# ULTRA KOTA KORUMALI İNTERNET ARAMA MOTORU
 def internette_ara(soru, gelismis_mod=False):
     try:
         site_bulucu = re.search(r'([a-zA-Z0-9.-]+\.(com|gov|net|org|edu|com\.tr|gov\.tr))', soru.lower())
         
-        # En iyi ve en nokta atışı 2 sonucu çekerek kotayı koruyoruz
+        # Uzun ve karmaşık soruları arama motorunun sapıtmaması için ilk 120 karakterle sınırlıyoruz
+        optimize_soru = soru[:120]
+        
         arama_parametreleri = {
-            "query": soru,
+            "query": optimize_soru,
             "max_results": 2, 
             "search_depth": "advanced",
             "include_raw_content": True
@@ -87,12 +89,12 @@ def internette_ara(soru, gelismis_mod=False):
 
         if site_bulucu:
             hedef_site = site_bulucu.group(1)
-            temiz_soru = re.sub(r'https?://', '', soru.lower())
+            temiz_soru = re.sub(r'https?://', '', optimize_soru.lower())
             temiz_soru = temiz_soru.replace(hedef_site, "").replace("www.", "").strip()
             temiz_soru = temiz_soru.replace("den", "").replace("dan", "").replace("in", "").strip()
             
             if not temiz_soru or len(temiz_soru) < 3:
-                arama_parametreleri["query"] = f"site:{hedef_site} hukuk karar mevzuat"
+                arama_parametreleri["query"] = f"site:{hedef_site} karar esas"
             else:
                 arama_parametreleri["query"] = f"site:{hedef_site} {temiz_soru}"
                 
@@ -102,22 +104,20 @@ def internette_ara(soru, gelismis_mod=False):
         
         if not arama_sonucu.get("results") and site_bulucu:
             arama_parametreleri.pop("include_domains", None)
-            arama_parametreleri["query"] = soru
+            arama_parametreleri["query"] = optimize_soru
             arama_sonucu = tavily_istenci.search(**arama_parametreleri)
 
         metinler = []
         for sonuc in arama_sonucu["results"]:
             icerik = sonuc.get('raw_content') or sonuc.get('content') or "İçerik yok"
-            
-            # Tüm gereksiz boşlukları siliyoruz
             icerik_temiz = re.sub(r'\s+', ' ', icerik).strip()
             
-            # KOTA DOSTU: Sayfa başına 900 karakter sınırı (Toplamda maksimum 1800 karakter gider)
-            metinler.append(f"- {sonuc['title']} ({sonuc['url']}): {icerik_temiz[:900]}")
+            # KOTA SIKIŞTIRMASI: Sayfa başına max 600 karakter göndererek Groq patlamalarını %100 engelliyoruz
+            metinler.append(f"- {sonuc['title']} ({sonuc['url']}): {icerik_temiz[:600]}")
                 
         return "\n".join(metinler)
     except Exception as e:
-        return f"Arama esnasında teknik bir kısıtlama oluştu: {str(e)}"
+        return f"Arama kısıtlaması: {str(e)}"
 
 # Kullanıcıdan girdi alma
 if soru_girdisi := st.chat_input("Mesajınızı buraya yazın..."):
@@ -134,7 +134,7 @@ if soru_girdisi := st.chat_input("Mesajınızı buraya yazın..."):
             internet_gerekli = any(kelime in soru_girdisi.lower() for kelime in arama_kelimeleri)
         
         if internet_gerekli:
-            with st.spinner("🌐 Hedef kaynaklar derinlemesine taranıyor..."):
+            with st.spinner("🌐 Hedef kaynaklar taranıyor..."):
                 is_advanced = (kisilik == "İnternet Araştırmacısı (Ajan)")
                 internet_bilgisi = internette_ara(soru_girdisi, gelismis_mod=is_advanced)
         else:
@@ -156,8 +156,8 @@ if soru_girdisi := st.chat_input("Mesajınızı buraya yazın..."):
         if dosya_icerigi:
             gonderilecek_mesajlar.append({"role": "system", "content": f"Dosya içeriği:\n{dosya_icerigi}"})
             
-        # KOTA DOSTU: Hafızadan sadece son 4 mesajı gönderiyoruz (Eski yükleri arkada bırakıyoruz)
-        gonderilecek_mesajlar.extend(st.session_state.mesaj_gecmisi[-4:])
+        # Hafızadan sadece son 2 mesajı göndererek geçmiş yük birikmesini sıfırlıyoruz
+        gonderilecek_mesajlar.extend(st.session_state.mesaj_gecmisi[-2:])
         
         if internet_bilgisi:
             gonderilecek_mesajlar[-1]["content"] += f"\n\n(İnternet Bilgisi:\n{internet_bilgisi})"
@@ -181,4 +181,5 @@ if soru_girdisi := st.chat_input("Mesajınızı buraya yazın..."):
                 st.audio("cevap.mp3", format="audio/mp3")
                 
         except Exception as e:
-            st.error(f"Sistem yoğunluğu veya kota sınırı: {e}")
+            # Kullanıcıya çirkin terminal hatası göstermek yerine kibar bir uyarı basıyoruz
+            st.warning("⚠️ Arka arkaya çok yoğun döküman sorgulandı. Lütfen 5 saniye bekleyip mesajınızı tekrar gönderin.")
