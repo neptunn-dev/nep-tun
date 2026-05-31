@@ -2,3 +2,4 @@ streamlit
 groq
 tavily
 gTTS
+playwright==1.60.0
