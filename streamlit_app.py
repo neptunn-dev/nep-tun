@@ -19,6 +19,34 @@ st.set_page_config(page_title="Mega Yapay Zeka İstasyonu", page_icon="🚀", la
 if "mesaj_gecmisi" not in st.session_state:
     st.session_state.mesaj_gecmisi = []
 
+# --- AKILLI BOT TRAFİK POLİSİ FONKSİYONU ---
+def otomatik_arama_kutusu_secici(soru_metni):
+    """
+    Babanın yazdığı soruya göre sitenin hangi arama kutusuna 
+    tıklanması gerektiğini çözen akıllı yönlendirici mantık.
+    """
+    soru = soru_metni.lower()
+    
+    # Detaylı arama gerektiren anahtar kelimeler
+    detayli_kriterler = ["daire", "hukuk", "ceza", "tazminat", "esas no", "karar no", "hırsızlık", "boşanma", "velayet"]
+    
+    # Eğer soruda bu detaylı kelimelerden biri geçiyorsa
+    if any(kelime in soru for kelime in detayli_kriterler):
+        return {
+            "kutu": "Detaylı Arama Kutusu (Gelişmiş Filtre)",
+            "renk": "orange",
+            "ikon": "🔍",
+            "id": "detayli_arama_input"
+        }
+    else:
+        # Düz, basit bir kelime veya arama ise
+        return {
+            "kutu": "Normal Arama Kutusu (Hızlı Sorgu)",
+            "renk": "blue",
+            "ikon": "⚡",
+            "id": "normal_arama_input"
+        }
+
 # --- SOL MENÜ (SIDEBAR) AYARLARI ---
 with st.sidebar:
     st.header("⚙️ Kontrol Paneli")
@@ -97,16 +125,14 @@ if kisilik == "İnternet Araştırmacısı (Ajan)":
     
     hukuk_metni = st.text_area(
         "Kopyaladığınız hukuki kararları buraya ekleyin:", 
-        height=250, 
+        height=200, 
         placeholder="Yargıtay ilam metinlerini buraya yapıştırın...",
         key="ana_yargitay_kutusu"
     )
     
     if hukuk_metni:
-        # Daha güçlü bir bölme mantığı: Büyük-küçük harf duyarsız YARGITAY veya T.C. görünce böler
         karar_parcalari = [p.strip() for p in re.split(r'(?i)(?=T\.C\.|YARGITAY)', hukuk_metni) if len(p.strip()) > 30]
         
-        # Eğer tek parça çıktıysa ama içinde birden fazla karar barındırıyorsa alternatif bölme
         if len(karar_parcalari) <= 1 and hukuk_metni.count("Esas No") > 1:
             karar_parcalari = [p.strip() for p in re.split(r'(?i)(?=Esas No)', hukuk_metni) if len(p.strip()) > 30]
 
@@ -115,7 +141,6 @@ if kisilik == "İnternet Araştırmacısı (Ajan)":
             
             secenekler = {}
             for i, parca in enumerate(karar_parcalari):
-                # Başlığı temizle ve ilk 70 karakteri al
                 temiz_baslik = re.sub(r'\s+', ' ', parca).strip()
                 baslik = f"⚖️ {i+1}. Karar: {temiz_baslik[:70]}..."
                 secenekler[baslik] = parca
@@ -125,7 +150,6 @@ if kisilik == "İnternet Araştırmacısı (Ajan)":
         else:
             yapistirilan_metin = hukuk_metni
 else:
-    # Diğer kişilikler için sol menüde standart metin alanı kalır
     with st.sidebar:
         st.subheader("📝 İnceleme Metni Yapıştır")
         yapistirilan_metin = st.text_area("Metin İçeriği:", height=200, placeholder="Uzun metni buraya yapıştırın...", key="standart_kutu")
@@ -143,6 +167,10 @@ if soru_girdisi := st.chat_input("Mesajınızı buraya yazın..."):
     with st.chat_message("user"):
         st.write(soru_girdisi)
     st.session_state.mesaj_gecmisi.append({"role": "user", "content": soru_girdisi})
+
+    # --- SİMÜLASYON: BABANIN YAZDIĞI SORGUDAN KUTU SEÇİMİ GÖSTERME ---
+    karar_durumu = otomatik_arama_kutusu_secici(soru_girdisi)
+    st.markdown(f":{karar_durumu['renk']}[{karar_durumu['ikon']} Otomatik Bot Yönlendirmesi: Arka planda **{karar_durumu['kutu']}** seçildi! (Hedef Element ID: `{karar_durumu['id']}`) ]")
 
     with st.chat_message("assistant"):
         if yapistirilan_metin:
