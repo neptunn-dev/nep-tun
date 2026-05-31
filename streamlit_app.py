@@ -77,53 +77,64 @@ for mesaj in st.session_state.mesaj_gecmisi:
     with st.chat_message(mesaj["role"]):
         st.write(mesaj["content"])
 
-# Akıllı ve Belirli Site Destekli İnternet Arama Fonksiyonu
+# Maksimum Veri Çeken Derin İnternet Arama Fonksiyonu
 def internette_ara(soru, gelismis_mod=False):
     try:
-        # Metnin içinde .com, .gov, .net, .org gibi bir site uzantısı var mı kontrol et
         site_bulucu = re.search(r'([a-zA-Z0-9.-]+\.(com|gov|net|org|edu|com\.tr|gov\.tr))', soru.lower())
         
+        # Arama ayarlarını maksimum derinliğe çekiyoruz
         arama_parametreleri = {
             "query": soru,
-            "max_results": 5 if gelismis_mod else 3
+            "max_results": 5,
+            "search_depth": "advanced",
+            "include_answer": True,
+            "include_raw_content": True
         }
-        
-        if gelismis_mod:
-            arama_parametreleri["search_depth"] = "advanced"
-            arama_parametreleri["include_raw_content"] = True
 
-        # Eğer kullanıcı bir site adı yazdıysa (Örn: yargitay.gov.tr'de 2018 kararı ara)
         if site_bulucu:
             hedef_site = site_bulucu.group(1)
-            # Arama teriminden site adını temizle ki aramayı bozmasın
-            temiz_soru = soru.lower().replace(hedef_site, "").strip()
-            arama_parametreleri["query"] = temiz_soru if temiz_soru else soru
+            temiz_soru = re.sub(r'https?://', '', soru.lower())
+            temiz_soru = temiz_soru.replace(hedef_site, "").replace("www.", "").strip()
+            temiz_soru = temiz_soru.replace("den", "").replace("dan", "").replace("in", "").strip()
+            
+            if not temiz_soru or len(temiz_soru) < 3:
+                arama_parametreleri["query"] = f"site:{hedef_site} hukuk karar mevzuat"
+            else:
+                arama_parametreleri["query"] = f"site:{hedef_site} {temiz_soru}"
+                
             arama_parametreleri["include_domains"] = [hedef_site]
 
         arama_sonucu = tavily_istenci.search(**arama_parametreleri)
         
+        # B PLANI: Özel site araması boş dönerse genele yay ve engelleri aş
+        if not arama_sonucu.get("results") and site_bulucu:
+            arama_parametreleri.pop("include_domains", None)
+            arama_parametreleri["query"] = soru
+            arama_sonucu = tavily_istenci.search(**arama_parametreleri)
+
         metinler = []
+        
+        # Tavily'nin kendi hazır akıllı cevabı varsa en başa ekle
+        if arama_sonucu.get("answer"):
+            metinler.append(f"[Özet Önbilgi]: {arama_sonucu['answer']}\n")
+            
         for sonuc in arama_sonucu["results"]:
-            if gelismis_mod:
-                icerik = sonuc.get('raw_content') or sonuc.get('content') or "İçerik yok"
-                metinler.append(f"- {sonuc['title']} ({sonuc['url']}): {icerik[:700]}")
-            else:
-                metinler.append(f"- {sonuc['content']} (Kaynak: {sonuc['url']})")
+            # Karakter sınırını 3000'e çıkararak sayfa içeriğini kırpmadan alıyoruz
+            icerik = sonuc.get('raw_content') or sonuc.get('content') or "İçerik yok"
+            metinler.append(f"- {sonuc['title']} ({sonuc['url']}): {icerik[:3000]}")
                 
         return "\n".join(metinler)
     except Exception as e:
-        return f"Arama hatası: {str(e)}"
+        return f"Arama esnasında teknik bir kısıtlama oluştu: {str(e)}"
 
 # Kullanıcıdan girdi alma
 if soru_girdisi := st.chat_input("Mesajınızı buraya yazın..."):
     
-    # Kullanıcı mesajını ekrana bas ve hafızaya kaydet
     with st.chat_message("user"):
         st.write(soru_girdisi)
     st.session_state.mesaj_gecmisi.append({"role": "user", "content": soru_girdisi})
 
     with st.chat_message("assistant"):
-        # Mod kontrolü ve internet tetikleme mekanizması
         if kisilik == "İnternet Araştırmacısı (Ajan)":
             internet_gerekli = True
         else:
@@ -137,14 +148,13 @@ if soru_girdisi := st.chat_input("Mesajınızı buraya yazın..."):
         else:
             internet_bilgisi = None
 
-        # Kişiliklere göre sistem talimatı belirleme
         if kisilik == "İnternet Araştırmacısı (Ajan)":
             karakter_talimati = (
                 "Sen son derece katı bir siber araştırma ve bilgi doğrulama uzmanısın. "
-                "Adım adım düşün: Önce sana sağlanan internet bilgilerini oku ve kullanıcının aradığı spesifik bilgi/karar numarası orada var mı kontrol et. "
-                "Eğer aranan karar numarası, yıl veya hukuki veri kaynaklarda AÇIKÇA geçmiyorsa, 'İnternet verilerinde bu kriterlere ait resmi bir karara ulaşılamadı' diyeceksiniz ve asla kafandan uydurmayacaksın. "
-                "Verdiğin her somut bilginin, rakamın veya dökümanın sonuna hangi web sitesi linkini/kaynağını kullandığını parantez içinde açıkça yazacaksın. "
-                "Yalnızca kullanıcı senden hayali bir senaryo, hukuki bir yorum veya beyin fırtınası isterse yaratıcı analizler yapabilirsin."
+                "Adım adım düşün: Sana sağlanan geniş internet dökümanlarını baştan sona tara. "
+                "Eğer aranan kelimeler, karar numaraları veya olay metinde gizliyse bul ve çıkar. "
+                "Eğer aranan bilgi sağlanan metinlerde kesinlikle yoksa durumu dürüstçe açıkla ama uydurma. "
+                "Verdiğin bilgilerin yanına hangi web sitesi linkini kullandığını parantez içinde açıkça yazacaksın."
             )
         elif kisilik == "Bilim İnsanı":
             karakter_talimati = "Sen ciddi, akademik, tamamen bilimsel verilere dayanan ve detaylı açıklamalar yapan bir bilim insanısın. Cevaplarında bolca bilimsel emoji kullan."
@@ -161,14 +171,13 @@ if soru_girdisi := st.chat_input("Mesajınızı buraya yazın..."):
         
         gonderilecek_mesajlar = [{"role": "system", "content": sistem_talimati}]
         
-        # Eğer yüklenmiş bir dosya varsa ekliyoruz
         if dosya_icerigi:
             gonderilecek_mesajlar.append({"role": "system", "content": f"Kullanıcının yüklediği dosya içeriği şudur:\n{dosya_icerigi}"})
             
         gonderilecek_mesajlar.extend(st.session_state.mesaj_gecmisi)
         
         if internet_bilgisi:
-            gonderilecek_mesajlar[-1]["content"] += f"\n\n(Güncel İnternet Bilgisi: {internet_bilgisi})"
+            gonderilecek_mesajlar[-1]["content"] += f"\n\n(Güncel İnternet Bilgisi:\n{internet_bilgisi})"
             
         try:
             cevap = groq_istenci.chat.completions.create(
@@ -178,14 +187,11 @@ if soru_girdisi := st.chat_input("Mesajınızı buraya yazın..."):
             )
             yanit = cevap.choices[0].message.content
             
-            # Cevabı ekrana yazdır
             st.write(yanit)
             st.session_state.mesaj_gecmisi.append({"role": "assistant", "content": yanit})
             
-            # Sadece ses motoru için metindeki emojileri temizliyoruz
             ses_metni = re.sub(r'[^\w\s,.!?:\(\)\-\"\']', '', yanit)
             
-            # Sesli Okuma Ayarı
             with st.spinner("🔊 Ses dosyası hazırlanıyor..."):
                 tts = gTTS(text=ses_metni[:300], lang='tr', tld='com.tr')
                 tts.save("cevap.mp3")
