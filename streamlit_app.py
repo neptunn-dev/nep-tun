@@ -104,4 +104,66 @@ def internette_ara(soru, gelismis_mod=False):
         return None
 
 # Kullanıcıdan girdi alma
-if soru_gird
+if soru_girdisi := st.chat_input("Mesajınızı buraya yazın..."):
+    
+    with st.chat_message("user"):
+        st.write(soru_girdisi)
+    st.session_state.mesaj_gecmisi.append({"role": "user", "content": soru_girdisi})
+
+    with st.chat_message("assistant"):
+        # Eğer sol menüde yapıştırılmış bir metin varsa internet aramasına hiç gerek kalmasın
+        if yapistirilan_metin:
+            internet_bilgisi = None
+            st.caption("⚡ Sol menüye yapıştırılan metin inceleniyor...")
+        else:
+            arama_kelimeleri = ["nedir", "kimdir", "araştır", "fiyatı", "haber", "açıkla", "anlat", "bilgi ver", ".com", ".gov"]
+            internet_gerekli = any(kelime in soru_girdisi.lower() for kelime in arama_kelimeleri)
+            if internet_gerekli:
+                with st.spinner("🌐 İnternet verileri taranıyor..."):
+                    internet_bilgisi = internette_ara(soru_girdisi)
+            else:
+                internet_bilgisi = None
+
+        # Karakter Talimatı (Tamamen düz metne odaklandı)
+        if kisilik == "İnternet Araştırmacısı (Ajan)":
+            karakter_talimati = (
+                "Sen son derece katı bir araştırma ve metin analiz uzmanısın. "
+                "Eğer sana bir 'Kullanıcı Metin İçeriği' sağlandıysa, soruları KESİNLİKLE o metne göre cevapla. "
+                "Metinde yazmayan hiçbir şeyi kafandan uydurma. Bilgi yoksa dürüstçe belirt."
+            )
+        else:
+            karakter_talimati = "Sen kibar, zeki ve yardımcı bir yapay zeka asistanısın."
+
+        sistem_talimati = f"{karakter_talimati} Sağlanan güncel dökümanları ve geçmişi dikkate alarak cevap üret."
+        gonderilecek_mesajlar = [{"role": "system", "content": sistem_talimati}]
+        
+        # EĞER YAPIŞTIRILAN METİN VARSA SİSTEME ENJEKTE EDİYORUZ
+        if yapistirilan_metin:
+            gonderilecek_mesajlar.append({"role": "system", "content": f"Kullanıcının Doğrudan Yapıştırdığı Metin İçeriği:\n{yapistirilan_metin}"})
+        elif dosya_icerigi:
+            gonderilecek_mesajlar.append({"role": "system", "content": f"Dosya içeriği:\n{dosya_icerigi}"})
+            
+        gonderilecek_mesajlar.extend(st.session_state.mesaj_gecmisi[-2:])
+        
+        if internet_bilgisi:
+            gonderilecek_mesajlar[-1]["content"] += f"\n\n(İnternet Bilgisi:\n{internet_bilgisi})"
+            
+        try:
+            cevap = groq_istenci.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=gonderilecek_mesajlar,
+                temperature=0.2
+            )
+            yanit = cevap.choices[0].message.content
+            
+            st.write(yanit)
+            st.session_state.mesaj_gecmisi.append({"role": "assistant", "content": yanit})
+            
+            ses_metni = re.sub(r'[^\w\s,.!?:\(\)\-\"\']', '', yanit)
+            with st.spinner("🔊 Ses dosyası hazırlanıyor..."):
+                tts = gTTS(text=ses_metni[:300], lang='tr', tld='com.tr')
+                tts.save("cevap.mp3")
+                st.audio("cevap.mp3", format="audio/mp3")
+                
+        except Exception as e:
+            st.warning("⚠️ Küçük bir yoğunluk kısıtlaması oldu. Lütfen birkaç saniye sonra tekrar gönderin.")
