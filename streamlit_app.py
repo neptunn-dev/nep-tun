@@ -73,7 +73,10 @@ with st.sidebar:
 st.title("🚀 Mega Yapay Zeka İstasyonu")
 st.write(f"Şu anki mod: **{kisilik}** | İnternette arar, yapıştırılan metinleri doğrudan inceler!")
 
-async def yargitay_karar_cek(daire_adi, esas_no, karar_no):
+def hukuk_karar_analizi(karar_metni, soru):
+    if not karar_metni:
+        return "Lütfen analiz edilmek üzere bir karar metni yapıştırın."
+    return None
     try:
         async with async_playwright() as p:
             browser = await p.chromium.launch(
