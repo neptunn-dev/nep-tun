@@ -102,26 +102,46 @@ def internette_ara(soru, gelismis_mod=False):
 
 # --- ÖZEL MOD: İNTERNET ARAŞTIRMACISI İÇİN YARGITAY ANALİZ PANELİ ---
 hukuk_metni = ""
+aktif_analiz_metni = ""
+
 if kisilik == "İnternet Araştırmacısı (Ajan)":
     st.info("⚖️ Yargıtay ve Hukuki Karar Analiz Paneli Aktif!")
     
     st.markdown("""
     **Karar Analiz Adımları:**
     1. [Yargıtay Karar Arama Sitesi'ne Gidin](https://karararama.yargitay.gov.tr/)
-    2. İncelemek istediğiniz kararın içeriğini kopyalayın.
-    3. Aşağıdaki kutuya yapıştırın ve ardından en alttaki sohbet kutusundan yapay zekaya dilediğiniz soruyu sorun!
+    2. İncelemek istediğiniz kararın içeriğini veya kararları kopyalayın.
+    3. Aşağıdaki kutuya yapıştırın. Birden fazla karar varsa sistem size seçtirecektir!
     """)
     
     st.subheader("⚖️ Karar Metnini Yapıştır")
     hukuk_metni = st.text_area(
-        "Kopyaladığınız hukuki kararı buraya ekleyin:", 
+        "Kopyaladığınız hukuki kararları buraya ekleyin:", 
         height=200, 
-        placeholder="Yargıtay ilam metnini buraya yapıştırın...",
+        placeholder="Yargıtay ilam metinlerini buraya yapıştırın...",
         key="yargitay_karar_kutusu"
     )
     
     if hukuk_metni:
-        yapistirilan_metin = hukuk_metni
+        # Metni "T.C." veya "YARGITAY" kelimelerinden bölerek birden fazla karar var mı diye bakıyoruz
+        karar_parcaları = [p.strip() for p in re.split(r'(?=T\.C\.|YARGITAY)', hukuk_metni) if len(p.strip()) > 100]
+        
+        if len(karar_parcaları) > 1:
+            st.warning(f"📋 Kutuda {len(karar_parcaları)} farklı karar tespit ettim!")
+            
+            # Seçenek listesi oluşturuyoruz
+            secenekler = {}
+            for i, parca in enumerate(karar_parcaları):
+                # Kararın ilk 60 karakterini başlık yapıyoruz
+                baslik = f"{i+1}. Karar: {parca[:60].replace('\n', ' ')}..."
+                secenekler[baslik] = parca
+                
+            secilen_baslik = st.radio("Baba, hangisini analiz edeyim? Seçebilirsin:", list(secenekler.keys()))
+            aktif_analiz_metni = secenekler[secilen_baslik]
+        else:
+            aktif_analiz_metni = hukuk_metni
+            
+        yapistirilan_metin = aktif_analiz_metni
 
 st.write("---")
 
@@ -140,7 +160,7 @@ if soru_girdisi := st.chat_input("Mesajınızı buraya yazın..."):
     with st.chat_message("assistant"):
         if yapistirilan_metin:
             internet_bilgisi = None
-            st.caption("⚡ Hafızaya alınan metin/karar inceleniyor...")
+            st.caption("⚡ Seçilen veya hafızaya alınan karar inceleniyor...")
         else:
             arama_kelimeleri = ["nedir", "kimdir", "araştır", "fiyatı", "haber", "açıkla", "anlat", "bilgi ver", ".com", ".gov"]
             internet_gerekli = any(kelime in soru_girdisi.lower() for kelime in arama_kelimeleri)
