@@ -19,32 +19,43 @@ st.set_page_config(page_title="Mega Yapay Zeka İstasyonu", page_icon="🚀", la
 if "mesaj_gecmisi" not in st.session_state:
     st.session_state.mesaj_gecmisi = []
 
-# --- AKILLI BOT TRAFİK POLİSİ FONKSİYONU ---
-def otomatik_arama_kutusu_secici(soru_metni):
-    """
-    Babanın yazdığı soruya göre sitenin hangi arama kutusuna 
-    tıklanması gerektiğini çözen akıllı yönlendirici mantık.
-    """
-    soru = soru_metni.lower()
-    
-    # Detaylı arama gerektiren anahtar kelimeler
-    detayli_kriterler = ["daire", "hukuk", "ceza", "tazminat", "esas no", "karar no", "hırsızlık", "boşanma", "velayet"]
-    
-    # Eğer soruda bu detaylı kelimelerden biri geçiyorsa
-    if any(kelime in soru for kelime in detayli_kriterler):
-        return {
-            "kutu": "Detaylı Arama Kutusu (Gelişmiş Filtre)",
-            "renk": "orange",
-            "ikon": "🔍",
-            "id": "detayli_arama_input"
+# --- AKILLI İNTERNET ARAMA OPTİMİZASYONU (SİTE MANTIĞI) ---
+def internette_ara_akilli(soru, kisilik_modu):
+    try:
+        temiz_soru = soru.lower()
+        temiz_soru = re.sub(r'https?://[^\s]+', '', temiz_soru)
+        temiz_soru = temiz_soru.replace("yargitay", "").replace("yargıtay", "").replace("gov.tr", "").strip()
+        
+        # Sitedeki mantık: Eğer soru detaylı hukuki bilgi içeriyorsa aramayı derinleştiriyoruz
+        detayli_kriterler = ["daire", "hukuk", "ceza", "tazminat", "esas no", "karar no", "hırsızlık", "boşanma", "velayet"]
+        
+        if any(kelime in temiz_soru for kelime in detayli_kriterler) or kisilik_modu == "İnternet Araştırmacısı (Ajan)":
+            # DETAYLI ARAMA MANTIĞI: Arama kelimelerini daha spesifik hale getirip derin arama yapıyoruz
+            arama_sorgusu = f"Yargıtay {temiz_soru[:100]} kesin karar metni emsal ilam"
+            derinlik = "advanced"
+            sonuc_sayisi = 3
+        else:
+            # NORMAL ARAMA MANTIĞI: Standart hızlı arama
+            arama_sorgusu = f"{temiz_soru[:100]} nedir bilgi"
+            derinlik = "basic"
+            sonuc_sayisi = 2
+            
+        arama_parametreleri = {
+            "query": arama_sorgusu,
+            "max_results": sonuc_sayisi, 
+            "search_depth": derinlik
         }
-    else:
-        return {
-            "kutu": "Normal Arama Kutusu (Hızlı Sorgu)",
-            "renk": "blue",
-            "ikon": "⚡",
-            "id": "normal_arama_input"
-        }
+        arama_sonucu = tavily_istenci.search(**arama_parametreleri)
+
+        metinler = []
+        for sonuc in arama_sonucu["results"]:
+            icerik = sonuc.get('content') or "İçerik yok"
+            icerik_temiz = re.sub(r'\s+', ' ', icerik).strip()
+            metinler.append(f"- {sonuc['title']} ({sonuc['url']}): {icerik_temiz[:600]}")
+                
+        return "\n".join(metinler)
+    except Exception:
+        return None
 
 # --- SOL MENÜ (SIDEBAR) AYARLARI ---
 with st.sidebar:
@@ -81,34 +92,6 @@ with st.sidebar:
 # Ana Sayfa Başlıkları
 st.title("🚀 Mega Yapay Zeka İstasyonu")
 st.write(f"Şu anki mod: **{kisilik}** | İnternette arar, yapıştırılan metinleri doğrudan inceler!")
-
-# KOTA DOSTU ARAMA FONKSİYONU
-def internette_ara(soru, gelismis_mod=False):
-    try:
-        temiz_soru = soru.lower()
-        temiz_soru = re.sub(r'https?://[^\s]+', '', temiz_soru)
-        temiz_soru = temiz_soru.replace("yargitay", "").replace("yargıtay", "").replace("gov.tr", "").strip()
-        
-        optimize_soru = temiz_soru[:100].strip()
-        if not optimize_soru:
-            return None
-            
-        arama_parametreleri = {
-            "query": f"{optimize_soru} detaylı bilgi",
-            "max_results": 2, 
-            "search_depth": "advanced"
-        }
-        arama_sonucu = tavily_istenci.search(**arama_parametreleri)
-
-        metinler = []
-        for sonuc in arama_sonucu["results"]:
-            icerik = sonuc.get('content') or "İçerik yok"
-            icerik_temiz = re.sub(r'\s+', ' ', icerik).strip()
-            metinler.append(f"- {sonuc['title']} ({sonuc['url']}): {icerik_temiz[:600]}")
-                
-        return "\n".join(metinler)
-    except Exception:
-        return None
 
 # --- ORTAK METİN ALANI (KİŞİLİĞE GÖRE DEĞİŞİR) ---
 yapistirilan_metin = ""
@@ -167,26 +150,23 @@ if soru_girdisi := st.chat_input("Mesajınızı buraya yazın..."):
         st.write(soru_girdisi)
     st.session_state.mesaj_gecmisi.append({"role": "user", "content": soru_girdisi})
 
-    # --- ARKA PLAN SEÇİM MANTIĞI SESSİZCE ÇALIŞIR ---
-    # İleride Selenium bota bağlandığında bu değişken kullanılacak, ekrana bir şey basılmayacak.
-    karar_durumu = otomatik_arama_kutusu_secici(soru_girdisi)
-
     with st.chat_message("assistant"):
         if yapistirilan_metin:
             internet_bilgisi = None
             st.caption("⚡ Seçilen karar metni yapay zeka tarafından inceleniyor...")
         else:
-            arama_kelimeleri = ["nedir", "kimdir", "araştır", "fiyatı", "haber", "açıkla", "anlat", "bilgi ver", ".com", ".gov"]
+            arama_kelimeleri = ["nedir", "kimdir", "araştır", "fiyatı", "haber", "açıkla", "anlat", "bilgi ver", ".com", ".gov", "esas", "karar", "daire"]
             internet_gerekli = any(kelime in soru_girdisi.lower() for kelime in arama_kelimeleri)
             if internet_gerekli:
-                with st.spinner("🌐 İnternet verileri taranıyor..."):
-                    internet_bilgisi = internette_ara(soru_girdisi)
+                with st.spinner("🌐 İnternet verileri akıllıca taranıyor..."):
+                    # BURADA YAZDIĞIN MANTIK ÇALIŞIYOR: Soruyu analiz edip arama tipini seçiyor!
+                    internet_bilgisi = internette_ara_akilli(soru_girdisi, kisilik)
             else:
                 internet_bilgisi = None
 
         # Karakter Kişilik Ayarları
         if kisilik == "İnternet Araştırmacısı (Ajan)":
-            karakter_talimati = "Sen uzman bir hukuk dedektifi and internet araştırmacısısın. Kararları hukuki terimlerle analiz et."
+            karakter_talimati = "Sen uzman bir hukuk dedektifi ve internet araştırmacısısın. Kararları hukuki terimlerle analiz et."
         elif kisilik == "Bilim İnsanı":
             karakter_talimati = "Sen analitik düşünen, verilere dayalı konuşan bir bilim insanısın."
         elif kisilik == "Mahalle Arkadaşı (Kanka)":
