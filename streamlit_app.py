@@ -108,6 +108,68 @@ def internette_ara_akilli(soru, kisilik_modu):
         return "\n".join(metinler)
     except Exception:
         return None
+# --- ADINI ANMADIĞIMIZ SİTEDEN VERİ ÇEKME MOTORU ---
+def gizli_siteden_karar_ara(aranacak_kelime):
+    chrome_options = Options()
+    chrome_options.add_argument("--headless=new") # Arka planda gizli çalıştır
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--disable-gpu")
+    chrome_options.binary_location = "/usr/bin/chromium"
+    
+    # Gerçek insan taklidi yapan kritik parametreler
+    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+    chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    chrome_options.add_experimental_option('useAutomationExtension', False)
+    chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+    
+    try:
+        from selenium.webdriver.common.by import By
+        from selenium.webdriver.support.ui import WebDriverWait
+        from selenium.webdriver.support import expected_conditions as EC
+        import time
+        
+        servis = Service("/usr/bin/chromedriver")
+        driver = webdriver.Chrome(service=servis, options=chrome_options)
+        
+        # Sitedeki arama linki (Görseldeki adres)
+        driver.get("https://yargitay.gov.tr")
+        
+        # Sayfanın ve arama kutusunun yüklenmesini bekle (Maksimum 15 saniye)
+        bekle = WebDriverWait(driver, 15)
+        
+        # Ekran görüntündeki "Anahtar kelime giriniz..." kutusunu yakala
+        # Sitenin kaynak kodundaki input ID veya placeholder'ına göre seçiyoruz
+        arama_kutusu = bekle.until(EC.presence_of_element_located((By.CSS_SELECTOR, "input[placeholder*='Anahtar kelime']")))
+        
+        # Kelimeyi insansı bir hızda yaz (Sistem bot olduğunu anlamasın)
+        for harf in aranacak_kelime:
+            arama_kutusu.send_keys(harf)
+            time.sleep(0.1)
+            
+        # Görseldeki yeşil "Ara" butonunu bul ve tıkla
+        ara_butonu = driver.find_element(By.CSS_SELECTOR, "button.btn-success, input[type='submit'], .ara-buton-sinifi") 
+        ara_butonu.click()
+        
+        # Sonuçların yüklenmesi için biraz bekle
+        time.sleep(5)
+        
+        # Gelen ilk kararların metinlerini topla
+        karar_elementleri = driver.find_elements(By.CLASS_NAME, "karar-metni-sinifi") # Sitenin yapısına göre güncellenir
+        sonuclar = []
+        for i, el in enumerate(karar_elementleri[:3]): # İlk 3 kararı al
+            sonuclar.append(f"Bulunan Karar {i+1}:\n{el.text}\n")
+            
+        driver.quit()
+        
+        if sonuclar:
+            return "\n".join(sonuclar)
+        else:
+            return "Arama yapıldı ancak otomatik veri okuma katmanına takıldı. Manuel analiz moduna geçebilirsiniz."
+            
+    except Exception as e:
+        if 'driver' in locals(): driver.quit()
+        return f"Gizlilik kalkanı aşılamadı veya element bulunamadı: {str(e)}"
 
 # --- 4. SOL MENÜ (SIDEBAR) ---
 with st.sidebar:
@@ -133,7 +195,7 @@ with st.sidebar:
 
 # --- 5. ANA SAYFA VE METİN ALANI ---
 st.title("🚀 Mega Yapay Zeka İstasyonu")
-st.write(f"Şu anki mod: **{kisilik}** | İnternette arar, yapıştırılan metinleri doğrudan inceler!")
+st.write(f"Şu anki mod: **{kisilik}** | normal bir yapay zeka, çok bişi beklemeyin")
 
 yapistirilan_metin = ""
 
@@ -166,37 +228,68 @@ st.write("---")
 for mesaj in st.session_state.mesaj_gecmisi:
     with st.chat_message(mesaj["role"]):
         st.write(mesaj["content"])
-
-# --- 6. İŞLETME DÖNGÜSÜ (GROQ & gTTS) ---
+# --- 6. İŞLETME DÖNGÜSÜ (KESİN RESMİ VERİ ODAKLI) ---
 if soru_girdisi := st.chat_input("Mesajınızı buraya yazın..."):
     with st.chat_message("user"):
         st.write(soru_girdisi)
     st.session_state.mesaj_gecmisi.append({"role": "user", "content": soru_girdisi})
 
     with st.chat_message("assistant"):
+        # Durum kontrol bayrağı (Resmi siteye girildi mi?)
+        resmi_site_aktif = False
+        
         if yapistirilan_metin:
             internet_bilgisi = None
             st.caption("⚡ Seçilen karar metni yapay zeka tarafından inceleniyor...")
         else:
-            arama_kelimeleri = ["nedir", "kimdir", "araştır", "fiyatı", "haber", "açıkla", "anlat", "bilgi ver", ".com", ".gov", "esas", "karar", "daire"]
-            if any(kelime in soru_girdisi.lower() for kelime in arama_kelimeleri):
-                with st.spinner("🌐 İnternet verileri akıllıca taranıyor..."):
-                    internet_bilgisi = internette_ara_akilli(soru_girdisi, kisilik)
+            # 🎯 RESMİ SİTEYİ TETİKLEYECEK KESİN ANAHTAR KELİMELER
+            site_tetikleyicileri = [
+                "yargıtay", "yargitay", "emsal", "ilam", "esas no", "karar no", "karar arama",
+                "dava", "boşanma davası", "velayet davası", "tazminat", "hırsızlık davası", 
+                "ceza davası", "hukuk dairesi", "ceza dairesi", "kararı", "kararlari"
+            ]
+            
+            gizli_site_istegi = any(kelime in soru_girdisi.lower() for kelime in site_tetikleyicileri)
+            
+            if gizli_site_istegi:
+                resmi_site_aktif = True
+                with st.spinner("🕵️ Sadece resmi kurum sitesine bağlanılıyor, veriler canlı kazınıyor..."):
+                    # Sadece ve sadece Selenium motorumuz çalışıyor
+                    internet_bilgisi = gizli_siteden_karar_ara(soru_girdisi)
             else:
-                internet_bilgisi = None
+                # Normal bir genel kültür veya yazılım sorusuysa standart arama
+                arama_kelimeleri = ["nedir", "kimdir", "araştır", "fiyatı", "haber", "açıkla", "anlat", "bilgi ver", ".com", ".gov"]
+                if any(kelime in soru_girdisi.lower() for kelime in arama_kelimeleri):
+                    with st.spinner("🌐 İnternet verileri akıllıca taranıyor..."):
+                        internet_bilgisi = internette_ara_akilli(soru_girdisi, kisilik)
+                else:
+                    internet_bilgisi = None
 
-        if kisilik == "İnternet Araştırmacısı (Ajan)":
-            karakter_talimati = "Sen uzman bir hukuk dedektifi ve internet araştırmacısısın. Kararları hukuki terimlerle analiz et."
-        elif kisilik == "Bilim İnsanı":
-            karakter_talimati = "Sen analitik düşünen, verilere dayalı konuşan bir bilim insanısın."
-        elif kisilik == "Mahalle Arkadaşı (Kanka)":
-            karakter_talimati = "Sen samimi, cana yakın ve çok içten bir mahalle arkadaşısın. Argoya kaçmadan sıcak bir dille konuş."
-        elif kisilik == "Yazılımcı Mentoru":
-            karakter_talimati = "Sen junior yazılımcılara rehberlik eden kıdemli bir yazılımcı mentorusun."
+        # --- YAPAY ZEKA TALİMATLARINI ZORLAMA (PROMPT ENJECTION KORUMASI) ---
+        if resmi_site_aktif:
+            # Yapay zekanın uydurmasını (hallucination) veya gayriresmi kaynakları kullanmasını KESİN olarak engelleyen talimat:
+            sistem_talimati = (
+                "SEN SADECE BİR RESMİ DOKÜMAN ANALİZ ASİSTANISIN. "
+                "Sana 'Canlı Kaynaklardan Elde Edilen Veriler' başlığı altında sağlanan ham metin DIŞINDA HİÇBİR BİLGİ KULLANMA. "
+                "Eğer sağlanan resmi metin boşsa veya hata mesajı içeriyorsa, kesinlikle kendi hafızandan emsal karar uydurma! "
+                "Resmi olmayan, doğrulanmamış hiçbir web sitesi bilgisini veya tahmini cevabı kullanıcıya sunma. "
+                "Cevaplarını sadece sağlanan resmi veriye dayandır ve son derece ciddi, hukuki bir dille konuş."
+            )
         else:
-            karakter_talimati = "Sen kibar, zeki ve yardımcı bir yapay zeka asistanısın."
+            # Standart kişilik ayarları (Normal aramalar için)
+            if kisilik == "İnternet Araştırmacısı (Ajan)":
+                karakter_talimati = "Sen uzman bir hukuk dedektifi ve internet araştırmacısısın. Kararları hukuki terimlerle analiz et."
+            elif kisilik == "Bilim İnsanı":
+                karakter_talimati = "Sen analitik düşünen, verilere dayalı konuşan bir bilim insanısın."
+            elif kisilik == "Mahalle Arkadaşı (Kanka)":
+                karakter_talimati = "Sen samimi, cana yakın ve çok içten bir mahalle arkadaşısın. Argoya kaçmadan sıcak bir dille konuş."
+            elif kisilik == "Yazılımcı Mentoru":
+                karakter_talimati = "Sen junior yazılımcılara rehberlik eden kıdemli bir yazılımcı mentorusun."
+            else:
+                karakter_talimati = "Sen kibar, zeki ve yardımcı bir yapay zeka asistanısın."
+            
+            sistem_talimati = f"{karakter_talimati} Sağlanan güncel dökümanları, internet verilerini ve geçmişi dikkate alarak cevap üret."
 
-        sistem_talimati = f"{karakter_talimati} Sağlanan güncel dökümanları ve geçmişi dikkate alarak cevap üret."
         gonderilecek_mesajlar = [{"role": "system", "content": sistem_talimati}]
         
         if yapistirilan_metin:
@@ -205,9 +298,11 @@ if soru_girdisi := st.chat_input("Mesajınızı buraya yazın..."):
         gonderilecek_mesajlar.extend(st.session_state.mesaj_gecmisi[-2:])
         
         if internet_bilgisi:
-            gonderilecek_mesajlar[-1]["content"] += f"\n\n(İnternet Bilgisi:\n{internet_bilgisi})"
+            gonderilecek_mesajlar[-1]["content"] += f"\n\n(Canlı Kaynaklardan Elde Edilen Veriler:\n{internet_bilgisi})"
             
         try:
+
+
             cevap = groq_istenci.chat.completions.create(
                 model="llama-3.3-70b-versatile",
                 messages=gonderilecek_mesajlar,
