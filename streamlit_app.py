@@ -36,6 +36,7 @@ def install_playwright_browsers():
 install_playwright_browsers()
 
 # Selenium Driver Başlatıcı
+# --- SELENIUM İÇİN GELİŞMİŞ GİZLENMİŞ (ANTI-BOT) SÜRÜCÜ AYARI ---
 @st.cache_resource
 def get_selenium_driver():
     chrome_options = Options()
@@ -44,12 +45,29 @@ def get_selenium_driver():
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--disable-gpu")
     chrome_options.binary_location = "/usr/bin/chromium"
+    
+    # 🕵️ GÜVENLİK DUVARLARINI AŞMA VE GİZLENME AYARLARI:
+    # Sitenin bizi otomasyon yazılımı (bot) olarak görmesini engeller
+    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+    chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    chrome_options.add_experimental_option('useAutomationExtension', False)
+    
+    # Gerçek bir kullanıcı gibi davranması için sahte Tarayıcı Kimliği (User-Agent) tanımlıyoruz
+    chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+
     try:
         servis = Service("/usr/bin/chromedriver")
-        return webdriver.Chrome(service=servis, options=chrome_options)
+        driver = webdriver.Chrome(service=servis, options=chrome_options)
+        
+        # Tarayıcıya "ben bot değilim" imzasını yerleştiriyoruz
+        driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
+            "source": "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
+        })
+        return driver
     except Exception as e:
         st.error(f"Selenium Driver başlatılamadı: {e}")
         return None
+
 
 # Örnek Playwright Fonksiyonu (İhtiyaç anında çağırmak için hazır)
 async def internetten_veri_cek_playwright(url):
