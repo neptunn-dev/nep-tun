@@ -1,5 +1,7 @@
 streamlit
 groq
-tavily
+tavily-python
 gTTS
+selenium
+webdriver-manager
 playwright==1.60.0
