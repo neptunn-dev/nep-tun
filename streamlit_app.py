@@ -1,12 +1,17 @@
 import asyncio
+import os
+import re
+import subprocess
 import streamlit as st
 from groq import Groq
 from tavily import TavilyClient
 from gtts import gTTS
-import os
-import re
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
+from playwright.async_api import async_playwright
 
-# API Anahtarlarını Streamlit Secrets üzerinden alıyoruz
+# --- 1. API ANAHTARLARI VE BAŞLATMA ---
 GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
 TAVILY_API_KEY = st.secrets["TAVILY_API_KEY"]
 
@@ -15,37 +20,66 @@ tavily_istenci = TavilyClient(api_key=TAVILY_API_KEY)
 
 st.set_page_config(page_title="Mega Yapay Zeka İstasyonu", page_icon="🚀", layout="wide")
 
-# Hafıza Kurulumu
 if "mesaj_gecmisi" not in st.session_state:
     st.session_state.mesaj_gecmisi = []
 
-# --- AKILLI İNTERNET ARAMA OPTİMİZASYONU (SİTE MANTIĞI) ---
+# --- 2. MULTI-BOT SÜRÜCÜ AYARLARI (SELENIUM & PLAYWRIGHT) ---
+
+# Playwright Sürücü Yükleyici
+@st.cache_resource
+def install_playwright_browsers():
+    try:
+        subprocess.run(["playwright", "install", "chromium"], check=True)
+    except Exception as e:
+        pass
+
+install_playwright_browsers()
+
+# Selenium Driver Başlatıcı
+@st.cache_resource
+def get_selenium_driver():
+    chrome_options = Options()
+    chrome_options.add_argument("--headless=new")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--disable-gpu")
+    chrome_options.binary_location = "/usr/bin/chromium"
+    try:
+        servis = Service("/usr/bin/chromedriver")
+        return webdriver.Chrome(service=servis, options=chrome_options)
+    except Exception as e:
+        st.error(f"Selenium Driver başlatılamadı: {e}")
+        return None
+
+# Örnek Playwright Fonksiyonu (İhtiyaç anında çağırmak için hazır)
+async def internetten_veri_cek_playwright(url):
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True)
+        page = await browser.new_page()
+        await page.goto(url, wait_until="networkidle")
+        icerik = await page.title()
+        await browser.close()
+        return icerik
+
+# --- 3. AKILLI İNTERNET ARAMA (TAVILY) ---
 def internette_ara_akilli(soru, kisilik_modu):
     try:
         temiz_soru = soru.lower()
         temiz_soru = re.sub(r'https?://[^\s]+', '', temiz_soru)
         temiz_soru = temiz_soru.replace("yargitay", "").replace("yargıtay", "").replace("gov.tr", "").strip()
         
-        # Sitedeki mantık: Eğer soru detaylı hukuki bilgi içeriyorsa aramayı derinleştiriyoruz
         detayli_kriterler = ["daire", "hukuk", "ceza", "tazminat", "esas no", "karar no", "hırsızlık", "boşanma", "velayet"]
         
         if any(kelime in temiz_soru for kelime in detayli_kriterler) or kisilik_modu == "İnternet Araştırmacısı (Ajan)":
-            # DETAYLI ARAMA MANTIĞI: Arama kelimelerini daha spesifik hale getirip derin arama yapıyoruz
             arama_sorgusu = f"Yargıtay {temiz_soru[:100]} kesin karar metni emsal ilam"
             derinlik = "advanced"
             sonuc_sayisi = 3
         else:
-            # NORMAL ARAMA MANTIĞI: Standart hızlı arama
             arama_sorgusu = f"{temiz_soru[:100]} nedir bilgi"
             derinlik = "basic"
             sonuc_sayisi = 2
             
-        arama_parametreleri = {
-            "query": arama_sorgusu,
-            "max_results": sonuc_sayisi, 
-            "search_depth": derinlik
-        }
-        arama_sonucu = tavily_istenci.search(**arama_parametreleri)
+        arama_sonucu = tavily_istenci.search(query=arama_sorgusu, max_results=sonuc_sayisi, search_depth=derinlik)
 
         metinler = []
         for sonuc in arama_sonucu["results"]:
@@ -57,21 +91,18 @@ def internette_ara_akilli(soru, kisilik_modu):
     except Exception:
         return None
 
-# --- SOL MENÜ (SIDEBAR) AYARLARI ---
+# --- 4. SOL MENÜ (SIDEBAR) ---
 with st.sidebar:
     st.header("⚙️ Kontrol Paneli")
-    
     if st.button("🗑️ Sohbeti Temizle", use_container_width=True):
         st.session_state.mesaj_gecmisi = []
         st.rerun()
         
     st.write("---")
-    
     kisilik = st.selectbox(
         "🤖 Asistan Kişiliği Seçin:",
         ["Standart Asistan", "İnternet Araştırmacısı (Ajan)", "Bilim İnsanı", "Mahalle Arkadaşı (Kanka)", "Yazılımcı Mentoru"]
     )
-    
     st.write("---")
     
     st.subheader("💾 Raporu İndir")
@@ -80,53 +111,29 @@ with st.sidebar:
         for mesaj in st.session_state.mesaj_gecmisi:
             rol = "Kullanıcı" if mesaj["role"] == "user" else "Yapay Zeka"
             sohbet_metni += f"{rol}: {mesaj['content']}\n\n"
-            
-        st.download_button(
-            label="📄 Sohbeti Not Olarak İndir",
-            data=sohbet_metni,
-            file_name="sohbet_ozeti.txt",
-            mime="text/plain",
-            use_container_width=True
-        )
+        st.download_button(label="📄 Sohbeti Not Olarak İndir", data=sohbet_metni, file_name="sohbet_ozeti.txt", mime="text/plain", use_container_width=True)
 
-# Ana Sayfa Başlıkları
+# --- 5. ANA SAYFA VE METİN ALANI ---
 st.title("🚀 Mega Yapay Zeka İstasyonu")
 st.write(f"Şu anki mod: **{kisilik}** | İnternette arar, yapıştırılan metinleri doğrudan inceler!")
 
-# --- ORTAK METİN ALANI (KİŞİLİĞE GÖRE DEĞİŞİR) ---
 yapistirilan_metin = ""
 
 if kisilik == "İnternet Araştırmacısı (Ajan)":
     st.info("⚖️ Yargıtay ve Hukuki Karar Analiz Paneli Aktif!")
-    
-    st.markdown("""
-    **Karar Analiz Adımları:**
-    1. İncelemek istediğiniz kararları kopyalayın.
-    2. Aşağıdaki büyük kutuya yapıştırın. Birden fazla karar varsa sistem size seçtirecektir!
-    """)
-    
-    hukuk_metni = st.text_area(
-        "Kopyaladığınız hukuki kararları buraya ekleyin:", 
-        height=200, 
-        placeholder="Yargıtay ilam metinlerini buraya yapıştırın...",
-        key="ana_yargitay_kutusu"
-    )
+    hukuk_metni = st.text_area("Kopyaladığınız hukuki kararları buraya ekleyin:", height=200, placeholder="Yargıtay ilam metinlerini buraya yapıştırın...", key="ana_yargitay_kutusu")
     
     if hukuk_metni:
         karar_parcalari = [p.strip() for p in re.split(r'(?i)(?=T\.C\.|YARGITAY)', hukuk_metni) if len(p.strip()) > 30]
-        
         if len(karar_parcalari) <= 1 and hukuk_metni.count("Esas No") > 1:
             karar_parcalari = [p.strip() for p in re.split(r'(?i)(?=Esas No)', hukuk_metni) if len(p.strip()) > 30]
 
         if len(karar_parcalari) > 1:
             st.warning(f"📋 Kutuda {len(karar_parcalari)} farklı karar tespit ettim!")
-            
             secenekler = {}
             for i, parca in enumerate(karar_parcalari):
                 temiz_baslik = re.sub(r'\s+', ' ', parca).strip()
-                baslik = f"⚖️ {i+1}. Karar: {temiz_baslik[:70]}..."
-                secenekler[baslik] = parca
-                
+                secenekler[f"⚖️ {i+1}. Karar: {temiz_baslik[:70]}..."] = parca
             secilen_baslik = st.radio("Baba, hangisini analiz edeyim? Seçebilirsin:", list(secenekler.keys()))
             yapistirilan_metin = secenekler[secilen_baslik]
         else:
@@ -138,14 +145,12 @@ else:
 
 st.write("---")
 
-# Eski Mesajları Ekrana Basma
 for mesaj in st.session_state.mesaj_gecmisi:
     with st.chat_message(mesaj["role"]):
         st.write(mesaj["content"])
 
-# Kullanıcıdan girdi alma ve işletme döngüsü
+# --- 6. İŞLETME DÖNGÜSÜ (GROQ & gTTS) ---
 if soru_girdisi := st.chat_input("Mesajınızı buraya yazın..."):
-    
     with st.chat_message("user"):
         st.write(soru_girdisi)
     st.session_state.mesaj_gecmisi.append({"role": "user", "content": soru_girdisi})
@@ -156,15 +161,12 @@ if soru_girdisi := st.chat_input("Mesajınızı buraya yazın..."):
             st.caption("⚡ Seçilen karar metni yapay zeka tarafından inceleniyor...")
         else:
             arama_kelimeleri = ["nedir", "kimdir", "araştır", "fiyatı", "haber", "açıkla", "anlat", "bilgi ver", ".com", ".gov", "esas", "karar", "daire"]
-            internet_gerekli = any(kelime in soru_girdisi.lower() for kelime in arama_kelimeleri)
-            if internet_gerekli:
+            if any(kelime in soru_girdisi.lower() for kelime in arama_kelimeleri):
                 with st.spinner("🌐 İnternet verileri akıllıca taranıyor..."):
-                    # BURADA YAZDIĞIN MANTIK ÇALIŞIYOR: Soruyu analiz edip arama tipini seçiyor!
                     internet_bilgisi = internette_ara_akilli(soru_girdisi, kisilik)
             else:
                 internet_bilgisi = None
 
-        # Karakter Kişilik Ayarları
         if kisilik == "İnternet Araştırmacısı (Ajan)":
             karakter_talimati = "Sen uzman bir hukuk dedektifi ve internet araştırmacısısın. Kararları hukuki terimlerle analiz et."
         elif kisilik == "Bilim İnsanı":
@@ -206,3 +208,4 @@ if soru_girdisi := st.chat_input("Mesajınızı buraya yazın..."):
                 
         except Exception as e:
             st.warning("⚠️ Küçük bir yoğunluk kısıtlaması oldu. Lütfen birkaç saniye sonra tekrar gönderin.")
+
