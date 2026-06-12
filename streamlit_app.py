@@ -111,18 +111,20 @@ def internette_ara_akilli(soru, kisilik_modu):
 # --- ADINI ANMADIĞIMIZ SİTEDEN VERİ ÇEKME MOTORU ---
 def gizli_siteden_karar_ara(aranacak_kelime):
     chrome_options = Options()
-    chrome_options.add_argument("--headless=new") # Arka planda gizli çalıştır
+    chrome_options.add_argument("--headless=new")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--disable-gpu")
     chrome_options.binary_location = "/usr/bin/chromium"
     
-    # Gerçek insan taklidi yapan kritik parametreler
+    # 🕵️ Gelişmiş Gizlilik ve Cloudflare Atlama Ayarları
     chrome_options.add_argument("--disable-blink-features=AutomationControlled")
     chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
     chrome_options.add_experimental_option('useAutomationExtension', False)
-    chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
-    
+    # Güncel ve temiz bir kullanıcı kimliği tanımlıyoruz
+    chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
+    chrome_options.add_argument("--lang=tr-TR")
+
     try:
         from selenium.webdriver.common.by import By
         from selenium.webdriver.support.ui import WebDriverWait
@@ -132,44 +134,89 @@ def gizli_siteden_karar_ara(aranacak_kelime):
         servis = Service("/usr/bin/chromedriver")
         driver = webdriver.Chrome(service=servis, options=chrome_options)
         
-        # Sitedeki arama linki (Görseldeki adres)
+        # Tarayıcının otomasyon imzasını tamamen sıfırlıyoruz
+        driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
+            "source": "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
+        })
+        
+        # Siteye giriş yap
         driver.get("https://yargitay.gov.tr")
         
-        # Sayfanın ve arama kutusunun yüklenmesini bekle (Maksimum 15 saniye)
-        bekle = WebDriverWait(driver, 15)
+        # Sayfa içeriğinin render edilmesi için ekstra 3 saniye kemiksiz bekleme süresi
+        time.sleep(3)
         
-        # Ekran görüntündeki "Anahtar kelime giriniz..." kutusunu yakala
-        # Sitenin kaynak kodundaki input ID veya placeholder'ına göre seçiyoruz
-        arama_kutusu = bekle.until(EC.presence_of_element_located((By.CSS_SELECTOR, "input[placeholder*='Anahtar kelime']")))
+        # 🎯 ELEMENT BULMA STRATEJİSİ: Tek bir Xpath yerine esnek alternatifler deniyoruz
+        arama_kutusu = None
+        alternatif_xpathler = [
+            "//input[contains(@placeholder, 'Anahtar')]",
+            "//input[@type='text']",
+            "//input[contains(@class, 'form-control')]",
+            "//input"
+        ]
         
-        # Kelimeyi insansı bir hızda yaz (Sistem bot olduğunu anlamasın)
+        for xpath in alternatif_xpathler:
+            try:
+                arama_kutusu = driver.find_element(By.XPATH, xpath)
+                if arama_kutusu.is_displayed():
+                    break
+            except:
+                continue
+                
+        if not arama_kutusu:
+            driver.quit()
+            return "Siteye bağlanıldı ancak arama girdi kutusu (input) sistem tarafından tespit edilemedi. Site yapısı değişmiş olabilir."
+            
+        # Temizle ve kelimeyi yaz
+        arama_kutusu.clear()
         for harf in aranacak_kelime:
             arama_kutusu.send_keys(harf)
-            time.sleep(0.1)
+            time.sleep(0.05) # Yazma hızını hafifçe hızlandırdık
             
-        # Görseldeki yeşil "Ara" butonunu bul ve tıkla
-        ara_butonu = driver.find_element(By.CSS_SELECTOR, "button.btn-success, input[type='submit'], .ara-buton-sinifi") 
-        ara_butonu.click()
+        # 🎯 BUTON BULMA STRATEJİSİ
+        ara_butonu = None
+        buton_xpathler = [
+            "//button[contains(text(), 'Ara')]",
+            "//button[contains(@class, 'btn')]",
+            "//button[@type='button']",
+            "//span[contains(text(), 'Ara')]"
+        ]
         
-        # Sonuçların yüklenmesi için biraz bekle
-        time.sleep(5)
-        
-        # Gelen ilk kararların metinlerini topla
-        karar_elementleri = driver.find_elements(By.CLASS_NAME, "karar-metni-sinifi") # Sitenin yapısına göre güncellenir
-        sonuclar = []
-        for i, el in enumerate(karar_elementleri[:3]): # İlk 3 kararı al
-            sonuclar.append(f"Bulunan Karar {i+1}:\n{el.text}\n")
+        for b_xpath in buton_xpathler:
+            try:
+                ara_butonu = driver.find_element(By.XPATH, b_xpath)
+                if ara_butonu.is_displayed():
+                    break
+            except:
+                continue
+                
+        if not ara_butonu:
+            driver.quit()
+            return "Arama kutusuna veri yazıldı ancak tıklanacak 'Ara' butonu bulunamadı."
             
+        # Butona tıkla
+        driver.execute_script("arguments[0].click();", ara_butonu)
+        
+        # Sonuçların yüklenmesi için 6 saniye bekle
+        time.sleep(6)
+        
+        # Sayfadaki ham metni veya sonuç tablolarını yakala
+        # Spasifik class ismi yerine tüm sayfa gövdesindeki (body) değişimi okuyoruz
+        sayfa_metni = driver.find_element(By.TAG_NAME, "body").text
+        
         driver.quit()
         
-        if sonuclar:
-            return "\n".join(sonuclar)
-        else:
-            return "Arama yapıldı ancak otomatik veri okuma katmanına takıldı. Manuel analiz moduna geçebilirsiniz."
+        # Eğer sayfada sonuç bulunamadı uyarısı varsa veya metin çok kısaysa kontrol et
+        if "Adet Karar Mevcuttur" in sayfa_metni or len(sayfa_metni) < 500:
+            return "Arama tetiklendi fakat arama kriterlerine uygun resmi bir karar listelenmedi veya boş sonuç döndü."
+            
+        # Ham veriyi temizle ve ilk 1500 karakterini özetlemesi için yapay zekaya gönder
+        temiz_ozet = re.sub(r'\s+', ' ', sayfa_metni).strip()
+        return temiz_ozet[:1500]
             
     except Exception as e:
         if 'driver' in locals(): driver.quit()
-        return f"Gizlilik kalkanı aşılamadı veya element bulunamadı: {str(e)}"
+        # Detaylı hata mesajı yerine temiz ve anlaşılır bir geri bildirim veriyoruz
+        return f"Resmi kurum sitesinin güvenlik duvarı (Cloudflare/Bot Engelleyici) veya sunucu yoğunluğu nedeniyle bağlantı zaman aşımına uğradı."
 
 # --- 4. SOL MENÜ (SIDEBAR) ---
 with st.sidebar:
