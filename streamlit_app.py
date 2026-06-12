@@ -357,6 +357,11 @@ if soru_girdisi := st.chat_input("Mesajınızı buraya yazın..."):
             )
             yanit = cevap.choices[0].message.content
             
+            # --- BAĞLANTI HATASI DURUMUNDA KULLANICIYA YARDIMCI OLMA KATMANI ---
+            if internet_bilgisi and ("Resmi kurum sitesinin güvenlik duvarı" in internet_bilgisi or "Zaman aşımı" in internet_bilgisi):
+                st.error("🔒 Sitenin katı güvenlik duvarı (Cloudflare) sunucumuzun otomatik erişimini engelledi.")
+                st.info("💡 **Çözüm:** Aramayı tarayıcınızda manuel yapıp, çıkan kararı kopyalayarak sol menüdeki veya yukarıdaki metin alanına yapıştırırsanız, sistem resmi analizine kaldığı yerden devam edecektir!")
+ 
             st.write(yanit)
             st.session_state.mesaj_gecmisi.append({"role": "assistant", "content": yanit})
             
